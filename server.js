@@ -42,14 +42,21 @@ let rooms = {};
 io.on('connection', (socket) => {
   console.log('New client connected');
   
+  // Modify the 'disconnect' event
   socket.on('disconnect', () => {
-    console.log('Client disconnected');
-    const roomCode = Object.keys(socket.rooms)[0];
-    if(rooms[roomCode]) {
-    rooms[roomCode] = rooms[roomCode].filter(id => id !== socket.id);
-    if (rooms[roomCode].length === 0) {
-      delete rooms[roomCode];
-    }}
+    console.log(`User ${socket.id} disconnected`);
+
+    // Iterate over each room
+    for (let roomCode in rooms) {
+      // If the disconnected socket was in this room
+      if (rooms[roomCode].includes(socket.id)) {
+        // Remove the socket from the room
+        rooms[roomCode] = rooms[roomCode].filter(id => id !== socket.id);
+
+        // Inform other clients in the room that this client has left
+        socket.to(roomCode).emit('userLeftRoom', { roomCode, users: rooms[roomCode] });
+      }
+    }
   });
 
   socket.on('error', (error) => {
@@ -69,15 +76,31 @@ io.on('connection', (socket) => {
   });
   
   socket.on('join', ({ userId, roomCode }) => {
-    if (rooms[roomCode] && rooms[roomCode].length < 8) {
-      socket.join(roomCode);
+    if(rooms[roomCode]) {
       rooms[roomCode].push(userId);
-      socket.emit('joinedRoom', { roomCode, users: rooms[roomCode] }); 
+      socket.join(roomCode);
+      socket.emit('joinedRoom', { roomCode, users: rooms[roomCode] }); // Confirm the join event to the joining client
+      socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: rooms[roomCode] }); // Inform all other clients in the room
       console.log(`User ${userId} has joined the room ${roomCode}`);
-    } else if (rooms[roomCode] && rooms[roomCode].length >= 8) {
-      socket.emit('error', 'Room is full');
     } else {
-      socket.emit('error', 'Room does not exist.');
+      socket.emit('error', 'Room does not exist.'); // Send an error message back to the client
+    }
+  });
+
+  // Implement 'leave' event
+  socket.on('leave', ({ userId, roomCode }) => {
+    if (rooms[roomCode]) {
+      // Remove the user from the room
+      rooms[roomCode] = rooms[roomCode].filter(id => id !== userId);
+
+      // Leave the room in socket.io
+      socket.leave(roomCode);
+
+      // Inform the client they've left the room
+      socket.emit('leftRoom', { roomCode, userId });
+
+      // Inform other clients in the room that this client has left
+      socket.to(roomCode).emit('userLeftRoom', { roomCode, users: rooms[roomCode] });
     }
   });
 });
