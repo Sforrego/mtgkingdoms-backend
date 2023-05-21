@@ -32,7 +32,7 @@ app.use(checkJwt);
 const server = http.createServer(app);
 const io = socketIo(server, {
     cors:{
-       origin: "http://localhost:3000",
+       origin: ["http://localhost:3000", "https://agreeable-river-08f60e510.3.azurestaticapps.net"],
        methods: ["GET", "POST"],
        allowedHeaders: ["my-custom-header"],
        credentials: true

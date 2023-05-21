@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "undefined/subscriptions/d144baf0-0916-4ce5-adc5-03afac951222/resourceGroups/KingdomsMTG/providers/Microsoft.Web/sites/mtgkingdoms-backend",
+    "appService.deploySubpath": "."
+}
