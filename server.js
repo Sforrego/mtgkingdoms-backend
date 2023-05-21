@@ -10,7 +10,9 @@ const app = express();
 
 const clientId = process.env.MTGKINGDOMS_CLIENT_ID;
 const tenantId = process.env.MTGKINGDOMS_TENANT_ID;
-const storageConnectionString = process.env.MTGKINGDOMS_STORAGE_CONNECTION_STRING; 
+const storageConnectionString = process.env.MTGKINGDOMS_STORAGE_CONNECTION_STRING;
+const port = process.env.PORT || 9998; // for local development
+
 console.log(storageConnectionString);
 // Middleware for validating JWTs
 const checkJwt = jwt({
@@ -143,5 +145,5 @@ io.on('connection', (socket) => {
 const generateRoomCode = () =>
   Math.random().toString(36).substring(6).toUpperCase();
 
-server.listen(9998, () => console.log('Listening on port 9998'));
+server.listen(port, () => console.log(`Listening on port ${port}`));
 
