@@ -4,12 +4,14 @@ const http = require('http');
 const socketIo = require('socket.io');
 const jwksRsa = require('jwks-rsa');
 const { expressjwt: jwt } = require('express-jwt');
+const { TableClient } = require("@azure/data-tables");
 
 const app = express();
 
 const clientId = process.env.MTGKINGDOMS_CLIENT_ID;
 const tenantId = process.env.MTGKINGDOMS_TENANT_ID;
-
+const storageConnectionString = process.env.MTGKINGDOMS_STORAGE_CONNECTION_STRING; 
+console.log(storageConnectionString);
 // Middleware for validating JWTs
 const checkJwt = jwt({
     // Provide a signing key based on the key identifier in the header and the signing keys provided by your Azure AD B2C endpoint.
@@ -63,6 +65,38 @@ io.on('connection', (socket) => {
     console.log('Socket error:', error);
   });
 
+  socket.on('getRoles', async () => {
+    let roles = [];
+    let specificOrder = ["Monarch", "Knight", "Bandit", "Renegade", "Noble", "SubRole"];
+
+    console.log("Getting roles");
+    try {
+      client = TableClient.fromConnectionString(storageConnectionString, "Roles");
+      const entities = client.listEntities();
+    
+      for await (const entity of entities) {
+        const role = {
+          Name: entity.partitionKey,
+          Type: entity.rowKey,
+          Image: entity.ImageUrl,
+          Ability: entity.Ability
+        };
+        // console.log(role);
+        roles.push(role);
+      }
+
+      roles.sort((a, b) => {
+        return specificOrder.indexOf(a.Type) - specificOrder.indexOf(b.Type);
+      });
+    } catch (error) {
+      console.log('Error occurred: ', error);
+      return;
+    }
+
+    // send the roles back to the client
+    socket.emit('rolesData', roles);
+  });
+
   // Implement 'create' event
   socket.on('create', ({ userId }) => {
     let roomCode;
@@ -106,14 +140,8 @@ io.on('connection', (socket) => {
 });
 
 // Function to generate a room code
-function generateRoomCode() {
-const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-let result = '';
-for (let i = 0; i < 6; i++) {
-  result += characters.charAt(Math.floor(Math.random() * characters.length));
-}
-return result;
-}
+const generateRoomCode = () =>
+  Math.random().toString(36).substring(6).toUpperCase();
 
 server.listen(9998, () => console.log('Listening on port 9998'));
 
