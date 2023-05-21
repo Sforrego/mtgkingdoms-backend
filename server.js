@@ -8,6 +8,11 @@ const { TableClient } = require("@azure/data-tables");
 
 const app = express();
 
+app.get('/test', (req, res) => {
+  res.send('Test route');
+});
+
+
 const clientId = process.env.MTGKINGDOMS_CLIENT_ID;
 const tenantId = process.env.MTGKINGDOMS_TENANT_ID;
 const storageConnectionString = process.env.MTGKINGDOMS_STORAGE_CONNECTION_STRING;
