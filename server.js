@@ -46,9 +46,24 @@ const io = socketIo(server, {
 let rooms = {};
 let users = {};
 
+function getUsersInRoom(roomCode) {
+  const usersObject = rooms[roomCode]?.users;
+  if (!usersObject) return [];
+
+  const usersArray = Object.entries(usersObject).map(([userId, userInfo]) => {
+    return {
+      userId,
+      ...userInfo
+    };
+  });
+
+  return usersArray;
+}
+
 io.on('connection', (socket) => {
   console.log('New client connected');
   socket.on('login', ({ userId, username }) => {
+    console.log(`User ${userId} with socketId ${socket.id} logged in`)
     // If the user is already logged in, update their socket ID
     if (users[userId]) {
       users[userId].socketId = socket.id;
@@ -94,7 +109,6 @@ io.on('connection', (socket) => {
     }
 });
 
-
   socket.on('error', (error) => {
     console.log('Socket error:', error);
   });
@@ -125,7 +139,7 @@ io.on('connection', (socket) => {
       lastGameRoles: [],
       lastMonarchUserId: null
     };
-    socket.emit('roomCreated', { roomCode, users: rooms[roomCode].users }); // Send the room code back to the client
+    socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users, null) }); // Send the room code back to the client
     console.log(`User ${userId} has created the room ${roomCode}`)
   });
 
@@ -168,22 +182,37 @@ io.on('connection', (socket) => {
   });
 
   socket.on('startGame', ({ roomCode }) => {
-    if(rooms[roomCode] && Object.keys(rooms[roomCode].users).length >= 4) {
+    if(rooms[roomCode] && Object.keys(rooms[roomCode].users).length >= 2) {
       let gameRoles = assignRoles(Object.keys(rooms[roomCode].users).length, roomCode);
-      let shuffledUsers = shuffleUsers([...Object.keys(rooms[roomCode].users)]); // Create a copy and shuffle users excluding lastMonarchUserId
+      let shuffledUsers = shuffleUsers([...Object.keys(rooms[roomCode].users)], rooms[roomCode].lastMonarchUserId); // Create a copy and shuffle users excluding lastMonarchUserId
+      console.log(gameRoles);
       shuffledUsers.forEach((userId, index) => {
-        users[userId].role = gameRoles[index];
-        io.to(users[userId].socketId).emit('roleAssigned', { role: gameRoles[index] });
+        let currentUser = rooms[roomCode].users[userId];
+        currentUser.role = gameRoles[index];
+        console.log(index);
+        console.log(gameRoles);
+        console.log(gameRoles[index]);
+        io.to(currentUser.socketId).emit('gameStarted', { userRole: gameRoles[index], teammates: null });
         if(gameRoles[index].roleType === "Monarch") {
           rooms[roomCode].lastMonarchUserId = userId;
+          currentUser.role.isRevealed = true;
         }
       });
       rooms[roomCode].hasStarted = true;
-      io.to(roomCode).emit('gameStarted', { users: sanitizeUserData(rooms[roomCode].users, null) });
+      io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users, null) });
     } else {
       socket.emit('error', 'Not enough players to start a game.'); 
     }
   });
+
+  socket.on('revealRole', ({ userId, roomCode }) => {
+    console.log(userId);
+    console.log("REVEALED");
+    rooms[roomCode].users[userId].isRevealed = true;
+    console.log(sanitizeUserData(rooms[roomCode].users));
+    io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users, null) });
+  });
+
 });
 
 function sanitizeUserData(users, userId) {
@@ -192,14 +221,14 @@ function sanitizeUserData(users, userId) {
     if (id === userId) {
       sanitizedUser.role = role;
     }
-    else if (isRevealed){
+    else if (sanitizedUser.isRevealed){
       sanitizedUser.role = role;
     }
     return sanitizedUser;
   });
 }
 
-function shuffleUsers(users) {
+function shuffleUsers(users, lastMonarchUserId) {
   let otherUsers = users.filter(userId => userId !== lastMonarchUserId);
   let shuffledOtherUsers = shuffleArray([...otherUsers]);
   if(lastMonarchUserId !== null && users.includes(lastMonarchUserId)) {
@@ -229,22 +258,20 @@ function assignRoles(numPlayers, roomCode) {
   // Assign the roles
   for (let roleType of neededRoles) {
     // Get the potential roles of the current type that weren't used in the last game
-    let potentialRoles = roleCache
+    let potentialRoles = rolesCache
       .filter(role => role.Type === roleType && !rooms[roomCode].lastGameRoles.includes(role.Name))
-      .map(role => role.Name);
 
     // If there are no potential roles, then allow roles from the last game
     if (potentialRoles.length === 0) {
-      potentialRoles = roleCache
+      potentialRoles = rolesCache
         .filter(role => role.Type === roleType)
-        .map(role => role.Name);
     }
 
     // Choose a random role from the potential roles
     let chosenRole = potentialRoles[Math.floor(Math.random() * potentialRoles.length)];
     
     // Add the role to the assigned roles
-    assignedRoles.push({roleName: chosenRole, roleType: roleType});
+    assignedRoles.push({Name: chosenRole.Name, Type: chosenRole.Type, Ability: chosenRole.Ability, Image: chosenRole.Image});
   }
 
   // Save the assigned roles for the next game
