@@ -227,11 +227,23 @@ io.on('connection', (socket) => {
   });
 
   socket.on('revealRole', ({ userId, roomCode }) => {
-    console.log(userId);
-    console.log("REVEALED");
     rooms[roomCode].users[userId].isRevealed = true;
     console.log(sanitizeUserData(rooms[roomCode].users));
     io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users) });
+  });
+
+  socket.on('endGame', ({ roomCode }) => {
+    console.log(`Room ${roomCode} ended the game.`);
+    let roomUsers = rooms[roomCode].users;
+    for(let userId in roomUsers){
+      roomUsers[userId].role = undefined;
+      roomUsers[userId].isRevealed = false;
+      if(!roomUsers[userId].isConnected){
+        delete roomUsers[userId];
+      }
+    }
+    rooms[roomCode].hasActiveGame = false;
+    io.to(roomCode).emit('gameEnded', { users: sanitizeUserData(rooms[roomCode].users) });
   });
 
 });
