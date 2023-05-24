@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import express from 'express';
 import http from 'http';
+import {v4} from 'uuid';
 import {Server} from 'socket.io';
 import jwksRsa from 'jwks-rsa';
 import { expressjwt as jwt } from 'express-jwt';
@@ -44,7 +45,7 @@ interface Room {
   hasActiveGame: boolean;
   previousMonarchUserId?: string;
   previousGameRoles?: Role[];
-  gameStartedAt?: Date;
+  gameStartedAt?: number;
 }
 
 let rolesCache: Role[] = [];
@@ -223,7 +224,7 @@ io.on('connection', (socket) => {
         }
       });
       rooms[roomCode].hasActiveGame = true;
-      rooms[roomCode].gameStartedAt = new Date();
+      rooms[roomCode].gameStartedAt = Date.now();
       io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users) });
     } else {
       socket.emit('error', 'Not enough players to start a game.'); 
@@ -236,20 +237,55 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users) });
   });
 
-  socket.on('endGame', ({ roomCode }) => {
+  socket.on('endGame', ({ roomCode, winnersIds }) => {
     console.log(`Room ${roomCode} ended the game.`);
+    console.log(`Room ${winnersIds} ended the game.`);
     let roomUsers = rooms[roomCode].users;
+    if(winnersIds && winnersIds.length > 0){
+      // Save game to table
+      let gameId = v4();
+      let game = {
+        partitionKey: gameId,
+        rowKey: new Date().toISOString(),
+        gameLength: '', // To be filled in later
+      };
+      let gameStartTime = rooms[roomCode].gameStartedAt;
+      if (gameStartTime){
+        let gameEndTime = Date.now();
+        let gameLengthSeconds = (gameEndTime - gameStartTime) / 1000;
+        game.gameLength = `${Math.floor(gameLengthSeconds / 60)}:${gameLengthSeconds % 60}`;
+      }
+      const gameClient = TableClient.fromConnectionString(storageConnectionString, "Games");
+      gameClient.createEntity(game);
+      
+      const gameUserClient = TableClient.fromConnectionString(storageConnectionString, "GameUsers");
+      for(let userId in roomUsers){
+        let user: User = roomUsers[userId];
+        const gameUser ={
+          partitionKey: gameId,
+          rowKey: user.userId,
+          username: user.username || '',
+          roleType: user.role?.type || '',
+          roleName: user.role?.name || '',
+          didWin: winnersIds.includes(user.userId),
+          didReveal: user.isRevealed || false
+        }
+        gameUserClient.createEntity(gameUser);
+    }}
+
+    // Reset Room
     for(let userId in roomUsers){
-      roomUsers[userId].role = undefined;
-      roomUsers[userId].isRevealed = false;
-      if(!roomUsers[userId].isConnected){
+      let user: User = roomUsers[userId];
+      if(!user.isConnected){
         delete roomUsers[userId];
+      } else {
+        user.role = undefined;
+        user.isRevealed = false;
       }
     }
     rooms[roomCode].hasActiveGame = false;
     io.to(roomCode).emit('gameEnded', { users: sanitizeUserData(rooms[roomCode].users) });
   });
-
 });
 
 function sanitizeUserData(users: {[userId: string]: User}, userId?: string): SanitizedUser[] {
