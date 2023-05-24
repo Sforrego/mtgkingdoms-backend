@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +16,8 @@
     "express": "^4.18.2",
     "express-jwt": "^8.4.1",
     "jwks-rsa": "^3.0.1",
-    "socket.io": "^4.6.1"
+    "socket.io": "^4.6.1",
+    "typescript": "^5.0.4"
   },
   "devDependencies": {
     "@types/dotenv": "^8.2.0",
