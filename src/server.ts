@@ -14,6 +14,10 @@ const tenantId = process.env.MTGKINGDOMS_TENANT_ID;
 const storageConnectionString: string = process.env.MTGKINGDOMS_STORAGE_CONNECTION_STRING!;
 const port = process.env.PORT || 9998; // for local development
 
+app.get('/', (req, res) => {
+  res.send('Hello, this is a test endpoint!');
+});
+
 interface Role {
   name?: string;
   type?: string;
@@ -320,9 +324,9 @@ function assignRoles(numPlayers: number, roomCode: string) {
   return assignedRoles;
 }
 
-// Function to generate a room code
-const generateRoomCode = () =>
-  Math.random().toString(36).substring(6).toUpperCase();
+const generateRoomCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 
 async function loadRoles() {
   try {
