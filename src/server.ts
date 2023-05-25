@@ -99,7 +99,10 @@ io.on('connection', (socket) => {
           rooms[user.roomCode].users[user.userId] = user;
         }
         socket.join(user.roomCode);
-        socket.emit('reconnectedToRoom', {user: rooms[user.roomCode].users[user.userId], usersInRoom: sanitizeUserData(rooms[user.roomCode].users),
+        let userInRoom = rooms[user.roomCode].users[user.userId];
+        let teammates: User[] = getTeammates(Object.values(rooms[user.roomCode].users), userId, userInRoom.role);
+        let team: User[] = [userInRoom, ...teammates];
+        socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(rooms[user.roomCode].users),
            activeGame: rooms[user.roomCode].hasActiveGame, roomCode: user.roomCode});
       }
     } else {
@@ -217,12 +220,23 @@ io.on('connection', (socket) => {
       shuffledUsers.forEach((user, index) => {
         let currentUser: User = rooms[roomCode].users[user.userId];
         currentUser.role = gameRoles[index];
-        io.to(currentUser.socketId).emit('gameStarted', { userRole: gameRoles[index], teammates: null });
         if(gameRoles[index].type === "Monarch") {
           rooms[roomCode].previousMonarchUserId = user.userId;
           currentUser.isRevealed = true;
         }
       });
+      for (let userId in rooms[roomCode].users){
+        let sendToUser = rooms[roomCode].users[userId]
+        let teammates = getTeammates(Object.values(rooms[roomCode].users), userId, sendToUser.role)
+        // Ensure teammates is an array before spreading
+        if (!Array.isArray(teammates)) {
+          teammates = [];
+        }
+        let team: User[] = [rooms[roomCode].users[userId], ...teammates]
+        console.log(team);
+        console.log(teammates);
+        io.to(sendToUser.socketId).emit('gameStarted', { team: team });
+      }
       rooms[roomCode].hasActiveGame = true;
       rooms[roomCode].gameStartedAt = Date.now();
       io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users) });
@@ -355,9 +369,26 @@ function assignRoles(numPlayers: number, roomCode: string) {
     assignedRoles.push(chosenRole);
   }
 
-  // Save the assigned roles for the next game
+  // Jester check
+  let renegade: Role | undefined = assignedRoles.find(r => r.name == "Jester")
+  if(renegade){
+    let knight: Role | undefined = assignedRoles.find(r => r.type == "Knight")
+    if(knight){
+      knight.name = "Corrupted "+knight.name;
+    }
+  }
   rooms[roomCode].previousGameRoles = assignedRoles;
   return assignedRoles;
+}
+
+function getTeammates(usersInRoom: User[], userId: string, role: Role | undefined): User[] {
+  let teammates: User[] = [];
+  if(role){
+    if (role.type == "Bandit"){
+      teammates = usersInRoom.filter(u => u.role?.type == "Bandit" && u.userId != userId)
+    }
+  }
+  return teammates
 }
 
 const generateRoomCode = () => {
