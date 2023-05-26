@@ -41,6 +41,7 @@ interface Room {
   previousMonarchUserId?: string;
   previousGameRoles?: Role[];
   gameStartedAt?: number;
+  selectedRoles: Role[]
 }
 
 let rolesCache: Role[] = [];
@@ -147,6 +148,7 @@ io.on('connection', (socket) => {
         [userId]: user
       },
       hasActiveGame: false,
+      selectedRoles: rolesCache
     };
     socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Send the room code back to the client
     console.log(`User ${userId} has created the room ${roomCode}`)
@@ -161,7 +163,7 @@ io.on('connection', (socket) => {
         let user: User = users[userId];
         user.roomCode = roomCode;
         rooms[roomCode].users[userId] = user
-        socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId) }); // Confirm the join event to the joining client
+        socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId), selectedRoles: rooms[roomCode].selectedRoles }); // Confirm the join event to the joining client
         socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Inform all other clients in the room
         console.log(`User ${userId} has joined the room ${roomCode}`);
       }
@@ -185,6 +187,13 @@ io.on('connection', (socket) => {
 
       // Inform other clients in the room that this client has left
       socket.to(roomCode).emit('userLeftRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users)});
+    }
+  });
+
+  socket.on('selectRoles', ({ roles, roomCode }) => {
+    if (rooms[roomCode]) {
+      rooms[roomCode].selectedRoles = roles;
+      io.to(roomCode).emit('rolesSelected', { roles });
     }
   });
 
@@ -334,11 +343,13 @@ function assignRoles(numPlayers: number, roomCode: string) {
   // Create an array to hold the assigned roles
   let assignedRoles: Role[] = [];
 
+  let roomSelectedRoles = rooms[roomCode].selectedRoles;
+
   // Assign the roles
   for (let roleType of neededRoles) {
     // Get the potential roles of the current type that weren't used in the previous game
 
-  let potentialRoles = rolesCache
+  let potentialRoles = roomSelectedRoles
       .filter(role => {
         let room = rooms[roomCode];
         return role.type === roleType && room && room.previousGameRoles && !room.previousGameRoles.some(prevRole => prevRole.name === role.name)
@@ -346,7 +357,7 @@ function assignRoles(numPlayers: number, roomCode: string) {
 
     // If there are no potential roles, then allow roles from the previous game
     if (potentialRoles.length === 0) {
-      potentialRoles = rolesCache
+      potentialRoles = roomSelectedRoles
         .filter(role => role.type === roleType)
     }
 
