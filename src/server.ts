@@ -3,15 +3,10 @@ import express from 'express';
 import http from 'http';
 import {v4} from 'uuid';
 import {Server} from 'socket.io';
-import jwksRsa from 'jwks-rsa';
-import { expressjwt as jwt } from 'express-jwt';
 import { TableClient } from '@azure/data-tables';
 
 dotenv.config();
 const app = express();
-
-const clientId = process.env.MTGKINGDOMS_CLIENT_ID;
-const tenantId = process.env.MTGKINGDOMS_TENANT_ID;
 const storageConnectionString: string = process.env.MTGKINGDOMS_STORAGE_CONNECTION_STRING!;
 const port = process.env.PORT || 9998; // for local development
 
@@ -52,24 +47,6 @@ let rolesCache: Role[] = [];
 let rooms: { [roomCode: string]: Room } = {};
 let users: { [userId: string]: User } = {};
 
-console.log(storageConnectionString);
-// Middleware for validating JWTs
-// const checkJwt = jwt({
-//     // Provide a signing key based on the key identifier in the header and the signing keys provided by your Azure AD B2C endpoint.
-//     secret: jwksRsa.expressJwtSecret({
-//       cache: true,
-//       rateLimit: true,
-//       jwksRequestsPerMinute: 5,
-//       jwksUri: `https://MTGKingdoms.b2clogin.com/MTGKingdoms.onmicrosoft.com/B2C_1_signupsignin/discovery/v2.0/keys`,
-//     }),
-//     // Validate the audience (your application ID) and the issuer.
-//     audience: clientId,
-//     issuer: `https://MTGKingdoms.b2clogin.com/${tenantId}/v2.0/`,
-//     algorithms: ['RS256'],
-// });
-
-// app.use(checkJwt);
-
 const server = http.createServer(app);
 const io = new Server(server, {
     cors:{
@@ -82,8 +59,6 @@ const io = new Server(server, {
 
 io.on('connection', (socket) => {
   console.log('New client connected');
-
-
   socket.on('login', ({ userId, username }) => {
     console.log(`User ${userId} with socketId ${socket.id} logged in`)
     // If the user had previously logged in, update their socket ID
@@ -181,14 +156,15 @@ io.on('connection', (socket) => {
     if(rooms[roomCode]) {
       if(rooms[roomCode].hasActiveGame){
         socket.emit('error', 'Game has already started')
+      } else {
+        socket.join(roomCode);
+        let user: User = users[userId];
+        user.roomCode = roomCode;
+        rooms[roomCode].users[userId] = user
+        socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId) }); // Confirm the join event to the joining client
+        socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Inform all other clients in the room
+        console.log(`User ${userId} has joined the room ${roomCode}`);
       }
-      socket.join(roomCode);
-      let user: User = users[userId];
-      user.roomCode = roomCode;
-      rooms[roomCode].users[userId] = user
-      socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId) }); // Confirm the join event to the joining client
-      socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Inform all other clients in the room
-      console.log(`User ${userId} has joined the room ${roomCode}`);
     } else {
       socket.emit('error', 'Room does not exist.'); // Send an error message back to the client
     }
@@ -246,7 +222,17 @@ io.on('connection', (socket) => {
   });
 
   socket.on('revealRole', ({ userId, roomCode }) => {
-    rooms[roomCode].users[userId].isRevealed = true;
+    let revealedUser = rooms[roomCode].users[userId]
+    revealedUser.isRevealed = true;
+    if (revealedUser.role && revealedUser.role.name == "Archenemy"){
+      let archenemyRevealed = rolesCache.find(r=>r.name == "Archenemy Revealed");
+      let villager = rolesCache.find(r=>r.name == "Villager")
+      revealedUser.role = archenemyRevealed
+      for(let user of Object.values(rooms[roomCode].users)){
+        user.isRevealed = true;
+        user.role = villager;
+      }
+    }
     console.log(sanitizeUserData(rooms[roomCode].users));
     io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users) });
   });
@@ -375,6 +361,7 @@ function assignRoles(numPlayers: number, roomCode: string) {
     let knight: Role | undefined = assignedRoles.find(r => r.type == "Knight")
     if(knight){
       knight.name = "Corrupted "+knight.name;
+      knight.ability = "You serve the Jester.\n"+(knight.ability?.replace("Monarch","Jester") ?? "")
     }
   }
   rooms[roomCode].previousGameRoles = assignedRoles;
