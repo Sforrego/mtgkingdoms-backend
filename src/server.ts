@@ -229,8 +229,10 @@ io.on('connection', (socket) => {
       let villager = rolesCache.find(r=>r.name == "Villager")
       revealedUser.role = archenemyRevealed
       for(let user of Object.values(rooms[roomCode].users)){
-        user.isRevealed = true;
-        user.role = villager;
+        if(userId != user.userId){
+          user.isRevealed = true;
+          user.role = villager;
+        }
       }
     }
     console.log(sanitizeUserData(rooms[roomCode].users));
@@ -361,7 +363,7 @@ function assignRoles(numPlayers: number, roomCode: string) {
     let knight: Role | undefined = assignedRoles.find(r => r.type == "Knight")
     if(knight){
       knight.name = "Corrupted "+knight.name;
-      knight.ability = "You serve the Jester.\n"+(knight.ability?.replace("Monarch","Jester") ?? "")
+      knight.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal."+(knight.ability?.replace("Monarch","Jester") ?? "")
     }
   }
   rooms[roomCode].previousGameRoles = assignedRoles;
@@ -373,6 +375,12 @@ function getTeammates(usersInRoom: User[], userId: string, role: Role | undefine
   if(role){
     if (role.type == "Bandit"){
       teammates = usersInRoom.filter(u => u.role?.type == "Bandit" && u.userId != userId)
+    }
+    else if (role.type == "Knight"){
+      teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId)
+    }
+    else if (role.type == "Noble"){
+      teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId)
     }
   }
   return teammates
