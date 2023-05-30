@@ -47,54 +47,56 @@ async function createGameUserEntities(gameId: string, room: Room, winnersIds: st
     }
   }
   
-  function generatePlayerTeams(io: Server, room: Room) {
-    for (let userId in room.users){
-      let sendToUser = room.users[userId];
-      let teammates = getTeammates(Object.values(room.users), userId, sendToUser.role);
-        if (!Array.isArray(teammates)) {
-            teammates = [];
-          }
-          let team: User[] = [room.users[userId], ...teammates];
-          io.to(sendToUser.socketId).emit('gameStarted', { team: team });
+function generatePlayerTeams(io: Server, room: Room) {
+  for (let userId in room.users){
+    let sendToUser = room.users[userId];
+    let teammates = getTeammates(Object.values(room.users), userId, sendToUser.role);
+      if (!Array.isArray(teammates)) {
+          teammates = [];
         }
+        let team: User[] = [room.users[userId], ...teammates];
+        io.to(sendToUser.socketId).emit('gameStarted', { team: team });
       }
-      
-      function generateRoomCode() {
-        return Math.floor(100000 + Math.random() * 900000).toString();
-      };
+    }
+    
+    function generateRoomCode() {
+      return Math.floor(100000 + Math.random() * 900000).toString();
+    };
       
 function getGameRoles(numPlayers: number, room: Room) {
-  const roleOrder = ["Monarch", "Bandit", "Bandit", "Knight", "Renegade", "Noble", "Noble", "Bandit"];
+  const roleOrder = ["Monarch", "Bandit", "Knight", "Bandit", "Renegade", "Noble", "Noble", "Bandit"];
   let neededRoles = roleOrder.slice(0, numPlayers);
   let assignedRoles: Role[] = [];
-  let roomSelectedRoles = room.selectedRoles;
+  let roomSelectedRoles = [...room.selectedRoles]; // Create a copy of selectedRoles
+
   for (let roleType of neededRoles) {
       let potentialRoles = roomSelectedRoles
-          .filter(role => {
-          return role.type === roleType && room && room.previousGameRoles && !room.previousGameRoles.some(prevRole => prevRole.name === role.name)
-          });
+          .filter(role => role.type === roleType && room && room.previousGameRoles && !room.previousGameRoles.some(prevRole => prevRole.name === role.name));
 
       if (potentialRoles.length === 0) {
           potentialRoles = roomSelectedRoles
-              .filter(role => role.type === roleType)
+              .filter(role => role.type === roleType);
       }
 
-    let chosenRole = potentialRoles[Math.floor(Math.random() * potentialRoles.length)];
-    assignedRoles.push(chosenRole);
+      let chosenRole = potentialRoles[Math.floor(Math.random() * potentialRoles.length)];
+      assignedRoles.push(chosenRole);
+      roomSelectedRoles = roomSelectedRoles.filter(role => role.name !== chosenRole.name); // Remove chosen role from the list
   }
 
   // Jester check
-  let renegade: Role | undefined = assignedRoles.find(r => r.name == "Jester")
+  let renegade: Role | undefined = assignedRoles.find(r => r.name == "Jester");
   if(renegade){
-    let knight: Role | undefined = assignedRoles.find(r => r.type == "Knight")
-    if(knight){
-      knight.name = "Corrupted "+knight.name;
-      knight.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal."+(knight.ability?.replace("Monarch","Jester") ?? "")
-    }
+      let knight: Role | undefined = assignedRoles.find(r => r.type == "Knight");
+      if(knight){
+          knight.name = "Corrupted "+knight.name;
+          knight.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal."+(knight.ability?.replace("Monarch","Jester") ?? "");
+      }
   }
+
   room.previousGameRoles = assignedRoles;
   return assignedRoles;
 }
+    
 
 function getTeammates(usersInRoom: User[], userId: string, role: Role | undefined): User[] {
     let teammates: User[] = [];

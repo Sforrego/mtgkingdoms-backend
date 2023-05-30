@@ -1,12 +1,11 @@
 import { Server, Socket } from 'socket.io';
-import { sanitizeUserData, shuffleUsers, assignRoles, generateRoomCode, 
+import { sanitizeUserData, generateRoomCode, 
     getTeammates, assignPlayerRoles, generatePlayerTeams, createGameEntity, 
     createGameUserEntities, resetRoomInfo } from './utils';
-import { User, Role, TableClients } from './types';
+import { User, Role } from './types';
 import { rooms, users, rolesCache } from './state';
 import { tableClients } from './config'
 import { v4 } from 'uuid';
-import { table } from 'console';
 
 function handleCreateRoom(socket:Socket, userId: string){
     let roomCode;
@@ -63,9 +62,12 @@ async function handleEndGame(io: Server, socket: Socket, roomCode: string, winne
         if(rooms[roomCode] && rooms[roomCode].hasActiveGame) {
             console.log(`Room ${roomCode} has ended a game.`);
             const room = rooms[roomCode];
-            const gameId = v4();
-            await createGameEntity(gameId, room, tableClients);
-            await createGameUserEntities(gameId, room, winnersIds, tableClients);
+            if (winnersIds.length > 0){
+                const gameId = v4();
+                createGameEntity(gameId, room, tableClients);
+                createGameUserEntities(gameId, room, winnersIds, tableClients);
+            }
+
             resetRoomInfo(io, room);
         } else {
             socket.emit('error', 'No active game to end.'); 
@@ -172,6 +174,25 @@ function handleStartGame(io: Server, socket: Socket, roomCode: string){
     }
 }
 
+// Specific Renegade functions
+function handleChosenOneDecision(io: Server, userId: string, roomCode: string, decision: string){
+    let room = rooms[roomCode];
+    room.users[userId].role = rolesCache.find(r => r.name == decision);
+    io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
+}
+
+function handleCultification(io: Server, userId: string, roomCode: string, cultistsIds: string[]){
+    let room = rooms[roomCode];
+    let cultistRole = rolesCache.find(r => r.name == "Cultist");
+    for (let user of Object.values(rooms[roomCode].users)){
+        if (user.userId == userId || cultistsIds.includes(user.userId)){
+            user.role = cultistRole;
+            user.isRevealed = true;
+        }
+    }
+    io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
+}
+
 export function attachSocketEvents(io: Server) {
     io.on('connection', (socket) => {
         console.log('New client connected');
@@ -187,5 +208,8 @@ export function attachSocketEvents(io: Server) {
         socket.on('revealRole', ({ userId, roomCode }) => handleRevealRole(io, userId, roomCode));
         socket.on('selectRoles', ({ roles, roomCode }) => handleSelectRoles(io, roles, roomCode));
         socket.on('startGame', ({ roomCode }) => handleStartGame(io, socket, roomCode));
+
+        socket.on('chosenOneDecision', ({ userId, roomCode, decision }) => handleChosenOneDecision(io, userId, roomCode, decision))
+        socket.on('cultification', ({ userId, roomCode, cultistsIds }) => handleCultification(io, userId, roomCode, cultistsIds))
     });
 }
