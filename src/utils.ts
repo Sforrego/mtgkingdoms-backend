@@ -152,11 +152,10 @@ async function loadRoles(rolesCache: Role[], rolesClient: TableClient) {
 function resetRoomInfo(io: Server, room: Room) {
     for(let userId in room.users){
         let user: User = room.users[userId];
+        user.role = undefined;
+        user.isRevealed = false;
         if(!user.isConnected){
             delete room.users[userId];
-        } else {
-            user.role = undefined;
-            user.isRevealed = false;
         }
     }
 

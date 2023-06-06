@@ -36,14 +36,14 @@ function handleDisconnect(socket: Socket){
         for (let userId in room.users) {
             if (room.users[userId].socketId === socket.id) {
                 if (room.hasActiveGame){
-                room.users[userId].isConnected = false;
+                    room.users[userId].isConnected = false;
                 } else {
-                delete room.users[userId];
+                    delete room.users[userId];
                 }
 
                 socket.to(roomCode).emit('userDisconnected', { roomCode, users: room.users });
                 if (Object.keys(room.users).length === 0) {
-                delete rooms[roomCode];
+                    delete rooms[roomCode];
                 }
 
                 break;
@@ -99,7 +99,11 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
 function handleLeaveRoom(socket:Socket, userId: string, roomCode: string){
     console.log(`${userId} left room ${roomCode}`)
     if (rooms[roomCode]) {
+        rooms[roomCode].users[userId].roomCode = undefined;
         delete rooms[roomCode].users[userId];
+        if (Object.keys(rooms[roomCode].users).length == 0){
+            delete rooms[roomCode];
+        }
         socket.leave(roomCode);
         socket.emit('leftRoom', { roomCode, userId });
         socket.to(roomCode).emit('userLeftRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users)});
@@ -114,16 +118,18 @@ function handleLogin(socket: Socket, userId: string, username: string){
         user.username = username;
         user.isConnected = true;
         if (user.roomCode && rooms[user.roomCode]){
-            if (!rooms[user.roomCode].hasActiveGame){
-                rooms[user.roomCode].users[user.userId] = user;
-            }
+            let roomCode = user.roomCode;
+            socket.join(roomCode);
+            if (!rooms[roomCode].hasActiveGame){
+                rooms[roomCode].users[user.userId] = user;
+                socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) });
+            } 
 
-            socket.join(user.roomCode);
-            let userInRoom = rooms[user.roomCode].users[user.userId];
-            let teammates: User[] = getTeammates(Object.values(rooms[user.roomCode].users), userId, userInRoom.role);
+            let userInRoom = rooms[roomCode].users[user.userId];
+            let teammates: User[] = getTeammates(Object.values(rooms[roomCode].users), userId, userInRoom.role);
             let team: User[] = [userInRoom, ...teammates];
-            socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(rooms[user.roomCode].users),
-                activeGame: rooms[user.roomCode].hasActiveGame, roomCode: user.roomCode});
+            socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(rooms[roomCode].users),
+                activeGame: rooms[roomCode].hasActiveGame, roomCode: roomCode});
         }
     } else {
         users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true };
@@ -190,6 +196,7 @@ function handleCultification(io: Server, userId: string, roomCode: string, culti
             user.isRevealed = true;
         }
     }
+    
     io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
 }
 
