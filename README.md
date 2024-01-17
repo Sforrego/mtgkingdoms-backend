@@ -10,3 +10,5 @@ npm install
 npm run build
 
 npm start
+
+To deploy install Azure App Services in VSCode, then right click the mtgkindoms-backend folder and at the bottom select deploy to web app.

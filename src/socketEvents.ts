@@ -42,7 +42,7 @@ function handleDisconnect(socket: Socket){
                 }
 
                 socket.to(roomCode).emit('userDisconnected', { roomCode, users: room.users });
-                if (Object.keys(room.users).length === 0) {
+                if (Object.keys(room.users).length === 0 && roomCode != "690420") {
                     delete rooms[roomCode];
                 }
 
@@ -101,7 +101,7 @@ function handleLeaveRoom(socket:Socket, userId: string, roomCode: string){
     if (rooms[roomCode]) {
         rooms[roomCode].users[userId].roomCode = undefined;
         delete rooms[roomCode].users[userId];
-        if (Object.keys(rooms[roomCode].users).length == 0){
+        if (Object.keys(rooms[roomCode].users).length == 0 && roomCode != "690420"){
             delete rooms[roomCode];
         }
         socket.leave(roomCode);
