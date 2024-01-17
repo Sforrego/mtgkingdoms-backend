@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { sanitizeUserData, generateRoomCode, 
-    getTeammates, assignPlayerRoles, generatePlayerTeams, createGameEntity, 
+    getTeammates, assignPlayerRoles, generatePlayerTeamsAndStartGame, createGameEntity, 
     createGameUserEntities, resetRoomInfo } from './utils';
 import { User, Role } from './types';
 import { rooms, users, rolesCache } from './state';
@@ -167,7 +167,7 @@ function handleStartGame(io: Server, socket: Socket, roomCode: string){
             console.log(`Room ${roomCode} is starting a game.`);
             const room = rooms[roomCode];
             assignPlayerRoles(room);
-            generatePlayerTeams(io, room);
+            generatePlayerTeamsAndStartGame(io, room);
             room.hasActiveGame = true;
             room.gameStartedAt = Date.now();
             io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });

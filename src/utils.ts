@@ -47,7 +47,9 @@ async function createGameUserEntities(gameId: string, room: Room, winnersIds: st
     }
   }
   
-function generatePlayerTeams(io: Server, room: Room) {
+function generatePlayerTeamsAndStartGame(io: Server, room: Room) {
+  var nobles = Object.values(room.users).filter(u => u.role?.type == "Noble").map(u => u.role);
+  console.log(nobles);
   for (let userId in room.users){
     let sendToUser = room.users[userId];
     let teammates = getTeammates(Object.values(room.users), userId, sendToUser.role);
@@ -55,7 +57,7 @@ function generatePlayerTeams(io: Server, room: Room) {
           teammates = [];
         }
         let team: User[] = [room.users[userId], ...teammates];
-        io.to(sendToUser.socketId).emit('gameStarted', { team: team });
+        io.to(sendToUser.socketId).emit('gameStarted', { team: team, nobles: nobles });
       }
     }
     
@@ -198,6 +200,6 @@ function shuffleUsers(users: User[], previousMonarchUserId?: string): User[] {
 }
 
 export { assignPlayerRoles, createGameEntity, createGameUserEntities, 
-        generateRoomCode, generatePlayerTeams, getGameRoles, getTeammates, gracefulShutdown, loadRoles, 
+        generateRoomCode, generatePlayerTeamsAndStartGame, getGameRoles, getTeammates, gracefulShutdown, loadRoles, 
         resetRoomInfo, sanitizeUserData, shuffleArray, shuffleUsers };
 
