@@ -26,7 +26,6 @@ const io = new Server(server, {
 
 loadRoles(rolesCache, tableClients.rolesClient);
 rooms["690420"].selectedRoles = rolesCache;
-
 attachSocketEvents(io);
 
 process.on('SIGTERM', () => {

@@ -125,10 +125,13 @@ function handleLogin(socket: Socket, userId: string, username: string){
             } 
 
             let userInRoom = rooms[roomCode].users[user.userId];
-            let teammates: User[] = getTeammates(Object.values(rooms[roomCode].users), userId, userInRoom.role);
-            let team: User[] = [userInRoom, ...teammates];
-            socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(rooms[roomCode].users),
-                activeGame: rooms[roomCode].hasActiveGame, roomCode: roomCode});
+
+            if(userInRoom){
+                let teammates: User[] = getTeammates(Object.values(rooms[roomCode].users), userId, userInRoom.role);
+                let team: User[] = [userInRoom, ...teammates];
+                socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(rooms[roomCode].users),
+                    activeGame: rooms[roomCode].hasActiveGame, roomCode: roomCode});
+            }
         }
     } else {
         users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true };
