@@ -37,5 +37,5 @@ process.on('SIGINT', () => {
   gracefulShutdown(io, server);
 });
 
-server.listen(port, () => console.log(`Listening on port ${port}`));
+server.listen(port, () => console.log(`[${new Date().toISOString()}] Listening on port ${port}`));
 

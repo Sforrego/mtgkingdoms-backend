@@ -1,8 +1,8 @@
 import { Server, Socket } from 'socket.io';
-import { sanitizeUserData, generateRoomCode, 
+import { sanitizeUserData, generateRoomCode, getUserData,
     getTeammates, assignPlayerRoles, generatePlayerTeamsAndStartGame, createGameEntity, 
     createGameUserEntities, resetRoomInfo } from './utils';
-import { User, Role } from './types';
+import { User, UserData, Role } from './types';
 import { rooms, users, rolesCache } from './state';
 import { tableClients } from './config'
 import { v4 } from 'uuid';
@@ -15,7 +15,6 @@ function handleCreateRoom(socket:Socket, userId: string){
     socket.join(roomCode);
     let user: User = users[userId];
     user.roomCode = roomCode;
-    console.log(rolesCache);
     rooms[roomCode] = {
         users: {
         [userId]: user
@@ -26,11 +25,11 @@ function handleCreateRoom(socket:Socket, userId: string){
     };
 
     socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Send the room code back to the client
-    console.log(`User ${userId} has created the room ${roomCode}`)
+    console.log(`[${new Date().toISOString()}] User ${userId} has created the room ${roomCode}`)
 }
 
 function handleDisconnect(socket: Socket){
-    console.log(`User ${socket.id} disconnected`);
+    console.log(`[${new Date().toISOString()}] User ${socket.id} disconnected`);
     for (let roomCode in rooms) {
         let room = rooms[roomCode];
         for (let userId in room.users) {
@@ -60,12 +59,12 @@ function handleDisconnect(socket: Socket){
 async function handleEndGame(io: Server, socket: Socket, roomCode: string, winnersIds: string[]){
     try {
         if(rooms[roomCode] && rooms[roomCode].hasActiveGame) {
-            console.log(`Room ${roomCode} has ended a game.`);
+            console.log(`[${new Date().toISOString()}] Room ${roomCode} has ended a game.`);
             const room = rooms[roomCode];
             if (winnersIds.length > 0){
                 const gameId = v4();
                 createGameEntity(gameId, room, tableClients);
-                createGameUserEntities(gameId, room, winnersIds, tableClients);
+                await createGameUserEntities(gameId, room, winnersIds, tableClients);
             }
 
             resetRoomInfo(io, room);
@@ -89,7 +88,7 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
             rooms[roomCode].users[userId] = user
             socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId), selectedRoles: rooms[roomCode].selectedRoles }); // Confirm the join event to the joining client
             socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Inform all other clients in the room
-            console.log(`User ${userId} has joined the room ${roomCode}`);
+            console.log(`[${new Date().toISOString()}] User ${userId} has joined the room ${roomCode}`);
         }
     } else {
         socket.emit('error', 'Room does not exist.'); // Send an error message back to the client
@@ -97,7 +96,7 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
 }
 
 function handleLeaveRoom(socket:Socket, userId: string, roomCode: string){
-    console.log(`${userId} left room ${roomCode}`)
+    console.log(`[${new Date().toISOString()}] ${userId} left room ${roomCode}`)
     if (rooms[roomCode]) {
         rooms[roomCode].users[userId].roomCode = undefined;
         delete rooms[roomCode].users[userId];
@@ -111,7 +110,7 @@ function handleLeaveRoom(socket:Socket, userId: string, roomCode: string){
 }
 
 function handleLogin(socket: Socket, userId: string, username: string){
-    console.log(`User ${userId} with socketId ${socket.id} logged in`)
+    console.log(`[${new Date().toISOString()}] User ${userId} with socketId ${socket.id} logged in`)
     if (users[userId]) {
         let user: User = users[userId];
         user.socketId = socket.id;
@@ -134,6 +133,11 @@ function handleLogin(socket: Socket, userId: string, username: string){
     } else {
         users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true };
     }
+}
+
+async function handleRequestUserData(socket: Socket, userId: string){
+    let userData: UserData | null = await getUserData(userId, tableClients.gameUserClient)
+    socket.emit('receiveUserData', userData);
 }
 
 function handleRevealRole(io: Server, userId:string, roomCode: string){
@@ -164,7 +168,7 @@ function handleSelectRoles(io: Server, roles: Role[], roomCode: string){
 function handleStartGame(io: Server, socket: Socket, roomCode: string){
     try {
         if(rooms[roomCode] && Object.keys(rooms[roomCode].users).length >= 2) {
-            console.log(`Room ${roomCode} is starting a game.`);
+            console.log(`[${new Date().toISOString()}] Room ${roomCode} is starting a game.`);
             const room = rooms[roomCode];
             assignPlayerRoles(room);
             generatePlayerTeamsAndStartGame(io, room);
@@ -202,16 +206,17 @@ function handleCultification(io: Server, userId: string, roomCode: string, culti
 
 export function attachSocketEvents(io: Server) {
     io.on('connection', (socket) => {
-        console.log('New client connected');
+        console.log(`[${new Date().toISOString()}] New client connected`);
         
         socket.on('create', ({ userId }) => handleCreateRoom(socket, userId));
         socket.on('disconnect', () => handleDisconnect(socket));
         socket.on('endGame', ({ roomCode, winnersIds }) => handleEndGame(io, socket, roomCode, winnersIds));
-        socket.on('error', (error) => console.log('Socket error:', error));
+        socket.on('error', (error) => console.log(`[${new Date().toISOString()}] Socket error:${error}`));
         socket.on('getRoles', async () => socket.emit('rolesData', rolesCache));
         socket.on('join', ({ userId, roomCode }) => handleJoinRoom(socket, userId, roomCode));
         socket.on('leaveRoom', ({ userId, roomCode }) => handleLeaveRoom(socket, userId, roomCode));
         socket.on('login', ({ userId, username }) => handleLogin(socket, userId, username));
+        socket.on('requestUserData', ({ userId }) => handleRequestUserData(socket, userId));
         socket.on('revealRole', ({ userId, roomCode }) => handleRevealRole(io, userId, roomCode));
         socket.on('selectRoles', ({ roles, roomCode }) => handleSelectRoles(io, roles, roomCode));
         socket.on('startGame', ({ roomCode }) => handleStartGame(io, socket, roomCode));

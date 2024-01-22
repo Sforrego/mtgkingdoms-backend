@@ -1,4 +1,4 @@
-import { Role, User, SanitizedUser, Room, TableClients } from './types';
+import { GameStatsSummary, GameUserEntity, Role, User, UserData, SanitizedUser, Room, TableClients } from './types';
 import { TableClient } from '@azure/data-tables';
 import { Server as HttpServer } from 'http';
 import { Server as IoServer, Server } from 'socket.io';
@@ -33,10 +33,7 @@ async function createGameEntity(gameId: string, room: Room, tableClients: TableC
 }
 
 async function createGameUserEntities(gameId: string, room: Room, winnersIds: string[], tableClients: TableClients) {
-  console.log(winnersIds)
   for(let userId in room.users) {
-    console.log(winnersIds.includes(userId));
-    console.log(userId);
     let userGame = {
       partitionKey: gameId,
       rowKey: userId,
@@ -49,7 +46,6 @@ async function createGameUserEntities(gameId: string, room: Room, winnersIds: st
   
 function generatePlayerTeamsAndStartGame(io: Server, room: Room) {
   var nobles = Object.values(room.users).filter(u => u.role?.type == "Noble").map(u => u.role);
-  console.log(nobles);
   for (let userId in room.users){
     let sendToUser = room.users[userId];
     let teammates = getTeammates(Object.values(room.users), userId, sendToUser.role);
@@ -99,6 +95,73 @@ function getGameRoles(numPlayers: number, room: Room) {
   return assignedRoles;
 }
     
+async function getUserData(userId: string, tableClient: TableClient): Promise<UserData | null> {
+  try {
+      const filter = `RowKey eq '${userId}'`;
+      const queryResults = tableClient.listEntities<GameUserEntity>({
+        queryOptions: { filter: filter }
+      });
+      
+      let userGames = [];
+      for await (const entity of queryResults) {
+          const timestamp = entity.timestamp ? new Date(entity.timestamp) : new Date(); // or some default value
+
+          const userGame = {
+          gameId: entity.partitionKey,
+          userId: entity.rowKey,
+          role: entity.role as string,
+          isWinner: entity.isWinner as boolean,
+          timestamp: timestamp
+          };
+          userGames.push(userGame);
+      }
+
+      userGames.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      const allTimeGamesStats = calculateGameStatsSummary(userGames);
+      const last10GamesStats = calculateGameStatsSummary(userGames.slice(0, 10));
+      const last5GamesStats = calculateGameStatsSummary(userGames.slice(0, 5));
+      const userData: UserData = {
+          userId: userId,
+          statsPeriod: 'All time',
+          stats: {
+              allTime: allTimeGamesStats,
+              last5Games: last5GamesStats,
+              last10Games: last10GamesStats,
+          },
+      };
+
+      return userData;
+
+  } catch (error) {
+      console.error('Error fetching user data:', error);
+      return null;
+  }
+}
+
+function calculateGameStatsSummary(gameEntities: any[]): GameStatsSummary {
+  let summary: GameStatsSummary = {
+    gamesPlayed: gameEntities.length,
+    wins: gameEntities.filter(e => e.isWinner).length,
+    rolesPlayed: {},
+    winsPerRole: {},
+  };
+
+  rolesType.forEach(role => {
+    summary.rolesPlayed[role] = 0;
+    summary.winsPerRole[role] = 0;
+  });
+
+  for (const entity of gameEntities) {
+    if (entity.role && rolesType.includes(entity.role)) {
+      summary.rolesPlayed[entity.role]++;
+      if (entity.isWinner) {
+        summary.winsPerRole[entity.role]++;
+      }
+    }
+  }
+
+  return summary;
+}
 
 function getTeammates(usersInRoom: User[], userId: string, role: Role | undefined): User[] {
     let teammates: User[] = [];
@@ -117,13 +180,13 @@ function getTeammates(usersInRoom: User[], userId: string, role: Role | undefine
 }
 
 function gracefulShutdown(io: IoServer, server: HttpServer) {
-    console.log('Shutting down gracefully...');
+    console.log(`[${new Date().toISOString()}] Shutting down gracefully...`);
     io.close(() => {
-      console.log('Socket.IO connections closed.');
+      console.log(`[${new Date().toISOString()}] Socket.IO connections closed.`);
     });
   
     server.close(() => {
-      console.log('HTTP server closed.');
+      console.log(`[${new Date().toISOString()}] HTTP server closed.`);
     });
 }
 
@@ -147,7 +210,7 @@ async function loadRoles(rolesCache: Role[], rolesClient: TableClient) {
         });
     } 
     catch (error) {
-        console.log('Error occurred while loading roles: ', error);
+        console.log(`[${new Date().toISOString()}] Error occurred while loading roles: ${error}`);
     }
 }
   
@@ -199,7 +262,9 @@ function shuffleUsers(users: User[], previousMonarchUserId?: string): User[] {
     return shuffledOtherUsers;
 }
 
+export const rolesType = ["Monarch", "Knight", "Bandit", "Renegade", "Noble"];
+
 export { assignPlayerRoles, createGameEntity, createGameUserEntities, 
-        generateRoomCode, generatePlayerTeamsAndStartGame, getGameRoles, getTeammates, gracefulShutdown, loadRoles, 
+        generateRoomCode, generatePlayerTeamsAndStartGame, getGameRoles, getUserData, getTeammates, gracefulShutdown, loadRoles, 
         resetRoomInfo, sanitizeUserData, shuffleArray, shuffleUsers };
 
