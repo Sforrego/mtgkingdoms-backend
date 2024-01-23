@@ -3,17 +3,15 @@ import { TableClient } from '@azure/data-tables';
 import { Server as HttpServer } from 'http';
 import { Server as IoServer, Server } from 'socket.io';
 
+const roleOrder = ["Monarch", "Bandit", "Knight", "Bandit", "Renegade", "Noble", "Noble", "Bandit"];
+
 function assignPlayerRoles(room: Room) {
-    const gameRoles: Role[] = getGameRoles(Object.keys(room.users).length, room);
+    const gameRoles: {[key: string]: Role[]} = getGameRoles(Object.keys(room.users).length, room);
     const shuffledUsers: User[] = shuffleUsers([...Object.values(room.users)], room.previousMonarchUserId);
     
     shuffledUsers.forEach((user, index) => {
       let currentUser: User = room.users[user.userId];
-      currentUser.role = gameRoles[index];
-      if(gameRoles[index].type === "Monarch") {
-            room.previousMonarchUserId = user.userId;
-            currentUser.isRevealed = true;
-          }
+      currentUser.potentialRoles = gameRoles[roleOrder[index]];
     });
 }
 
@@ -49,52 +47,69 @@ function generatePlayerTeamsAndStartGame(io: Server, room: Room) {
   for (let userId in room.users){
     let sendToUser = room.users[userId];
     let teammates = getTeammates(Object.values(room.users), userId, sendToUser.role);
-      if (!Array.isArray(teammates)) {
-          teammates = [];
-        }
-        let team: User[] = [room.users[userId], ...teammates];
-        io.to(sendToUser.socketId).emit('gameStarted', { team: team, nobles: nobles });
-      }
+    if (!Array.isArray(teammates)) {
+        teammates = [];
     }
-    
-    function generateRoomCode() {
-      return Math.floor(100000 + Math.random() * 900000).toString();
-    };
-      
-function getGameRoles(numPlayers: number, room: Room) {
-  const roleOrder = ["Monarch", "Bandit", "Knight", "Bandit", "Renegade", "Noble", "Noble", "Bandit"];
-  let neededRoles = roleOrder.slice(0, numPlayers);
-  let assignedRoles: Role[] = [];
-  let roomSelectedRoles = [...room.selectedRoles]; // Create a copy of selectedRoles
 
+    let team: User[] = [room.users[userId], ...teammates];
+    io.to(sendToUser.socketId).emit('gameStarted', { team: team, nobles: nobles });
+  }
+
+  room.hasActiveGame = true;
+  room.gameStartedAt = Date.now();
+  io.to(room.roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
+}
+
+function getPossibleRoles(io: Server, room: Room){
+  assignPlayerRoles(room);
+  Object.values(room.users).forEach(user => {
+    io.to(user.socketId).emit('selectYourCharacter', { potentialRoles: user.potentialRoles });
+  });
+}
+
+function generateRoomCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+  
+function getGameRoles(numPlayers: number, room: Room) {
+  let neededRoles = roleOrder.slice(0, numPlayers);
+  let possibleRoles: { [key: string]: Role[] } = {}; 
+  let roomSelectedRoles = [...room.selectedRoles]; 
+  let charactersPerRole = room.roleSelection? 2 : 1
   for (let roleType of neededRoles) {
       let potentialRoles = roomSelectedRoles
-          .filter(role => role.type === roleType && room && room.previousGameRoles && !room.previousGameRoles.some(prevRole => prevRole.name === role.name));
+          .filter(role => role.type === roleType);
 
-      if (potentialRoles.length === 0) {
-          potentialRoles = roomSelectedRoles
-              .filter(role => role.type === roleType);
-      }
-
-      let chosenRole = potentialRoles[Math.floor(Math.random() * potentialRoles.length)];
-      assignedRoles.push(chosenRole);
-      roomSelectedRoles = roomSelectedRoles.filter(role => role.name !== chosenRole.name); // Remove chosen role from the list
-  }
-
-  // Jester check
-  let renegade: Role | undefined = assignedRoles.find(r => r.name == "Jester");
-  if(renegade){
-      let knight: Role | undefined = assignedRoles.find(r => r.type == "Knight");
-      if(knight){
-          knight.name = "Corrupted "+knight.name;
-          knight.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal."+(knight.ability?.replace("Monarch","Jester") ?? "");
-      }
-  }
-
-  room.previousGameRoles = assignedRoles;
-  return assignedRoles;
-}
+      let chosenRoles = [];
+      while (chosenRoles.length < charactersPerRole && potentialRoles.length > 0) {
+        let roleIndex = Math.floor(Math.random() * potentialRoles.length);
+        let chosenRole = potentialRoles[roleIndex];
+        if (chosenRole) { 
+            chosenRoles.push(chosenRole);
+            potentialRoles.splice(roleIndex, 1); 
+        }
+    }
     
+    while (chosenRoles.length < charactersPerRole) {
+        let additionalRole = potentialRoles.shift();
+        if (additionalRole) {
+            chosenRoles.push(additionalRole);
+        } else {
+            console.error(`Not enough roles to assign ${charactersPerRole} choices per player.`);
+            break;
+        }
+      }
+    }
+
+  // Don't perform Jester logic here, as players haven't chosen their roles yet
+  // don't assign previous game roles here: room.previousGameRoles = Object.values(assignedRoles)
+  //      if(roleOrder[index].type === "Monarch") {
+  //   room.previousMonarchUserId = user.userId;
+  //   currentUser.isRevealed = true;
+  // }
+  return possibleRoles;
+}
+
 async function getUserData(userId: string, tableClient: TableClient): Promise<UserData | null> {
   try {
       const filter = `RowKey eq '${userId}'`;

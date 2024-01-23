@@ -12,19 +12,23 @@ interface Room {
   gameStartedAt?: number;
   previousMonarchUserId?: string;
   previousGameRoles?: Role[];
+  roleSelection: boolean,
   roomCode: string;
   selectedRoles: Role[];
   users: { [userId: string]: User };
+  allRolesSelected: boolean;
 }
 
 interface User {
-  isConnected: boolean;
-  isRevealed?: boolean;
-  socketId: string;
-  role?: Role;
-  roomCode?: string;
   userId: string;
   username: string;
+  socketId: string;
+  isConnected: boolean;
+  isRevealed?: boolean;
+  role?: Role;
+  potentialRoles?: Role[];
+  selectedRole?: Role;
+  roomCode?: string;
 }
 
 interface SanitizedUser extends Omit<User, 'role'> {

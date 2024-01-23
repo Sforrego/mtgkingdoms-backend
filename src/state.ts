@@ -10,6 +10,8 @@ export const rooms: Record<string, Room> = {
       previousGameRoles: undefined,
       roomCode: "690420",
       selectedRoles: [], 
-      users: {}
+      users: {},
+      roleSelection: true,
+      allRolesSelected: false
     }
   };  

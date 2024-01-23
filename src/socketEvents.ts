@@ -21,7 +21,9 @@ function handleCreateRoom(socket:Socket, userId: string){
         },
         hasActiveGame: false,
         selectedRoles: rolesCache,
-        roomCode: roomCode
+        roomCode: roomCode,
+        allRolesSelected: false,
+        roleSelection: true,
     };
 
     socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Send the room code back to the client
@@ -164,29 +166,45 @@ function handleRevealRole(io: Server, userId:string, roomCode: string){
     io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users) });
 }
 
-function handleSelectRoles(io: Server, roles: Role[], roomCode: string){
-    if (rooms[roomCode]) {
-        rooms[roomCode].selectedRoles = roles;
-        io.to(roomCode).emit('rolesSelected', { roles });
-    }
-}
-
 function handleStartGame(io: Server, socket: Socket, roomCode: string){
     try {
-        if(rooms[roomCode] && Object.keys(rooms[roomCode].users).length >= 2) {
+        if(rooms[roomCode] && Object.keys(rooms[roomCode].users).length >= 4) {
             console.log(`[${new Date().toISOString()}] Room ${roomCode} is starting a game.`);
             const room = rooms[roomCode];
             assignPlayerRoles(room);
-            generatePlayerTeamsAndStartGame(io, room);
-            room.hasActiveGame = true;
-            room.gameStartedAt = Date.now();
-            io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
+            if (!room.roleSelection){
+                generatePlayerTeamsAndStartGame(io, room);
+            } else {
+                Object.values(room.users).forEach(user => {
+                    io.to(user.socketId).emit('selectYourCharacter', { potentialRoles: user.potentialRoles });
+                });
+            }
         } else {
             socket.emit('error', 'Not enough players to start a game.'); 
         }
     } catch(error) {
         console.error(`Error starting game in room ${roomCode}: `, error);
         socket.emit('error', 'An error occurred while starting the game.');
+    }
+}
+
+function handleSelectCharacter(io: Server, userId: string, roomCode: string, selectedRoleIndex: number) {
+    const room = rooms[roomCode];
+    const user = room.users[userId];
+
+    if(user && user.potentialRoles && user.potentialRoles[selectedRoleIndex]) {
+        user.selectedRole = user.potentialRoles[selectedRoleIndex];
+        io.to(user.socketId).emit('characterSelected', { selectedRole: user.selectedRole });
+        const allSelected = Object.values(room.users).every(user => user.selectedRole);
+        room.allRolesSelected = allSelected;
+        if(allSelected) {
+            generatePlayerTeamsAndStartGame(io, room);
+        } else {
+            io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
+        }
+    }
+    else {
+        io.to(user.socketId).emit('error', 'Error when selecting character.');
     }
 }
 
@@ -224,7 +242,7 @@ export function attachSocketEvents(io: Server) {
         socket.on('login', ({ userId, username }) => handleLogin(socket, userId, username));
         socket.on('requestUserData', ({ userId }) => handleRequestUserData(socket, userId));
         socket.on('revealRole', ({ userId, roomCode }) => handleRevealRole(io, userId, roomCode));
-        socket.on('selectRoles', ({ roles, roomCode }) => handleSelectRoles(io, roles, roomCode));
+        socket.on('selectCharacter', ({ userId, roomCode, selectedRoleIndex }) => handleSelectCharacter(io, userId, roomCode, selectedRoleIndex));
         socket.on('startGame', ({ roomCode }) => handleStartGame(io, socket, roomCode));
 
         socket.on('chosenOneDecision', ({ userId, roomCode, decision }) => handleChosenOneDecision(io, userId, roomCode, decision))
