@@ -95,17 +95,20 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
     }
 }
 
-function handleLeaveRoom(socket:Socket, userId: string, roomCode: string){
-    console.log(`[${new Date().toISOString()}] ${userId} left room ${roomCode}`)
+function handleLeaveRoom(socket: Socket, userId: string, roomCode: string){
+    console.log(`[${new Date().toISOString()}] ${userId} left room ${roomCode}`);
     if (rooms[roomCode]) {
         rooms[roomCode].users[userId].roomCode = undefined;
         delete rooms[roomCode].users[userId];
-        if (Object.keys(rooms[roomCode].users).length == 0 && roomCode != "690420"){
+        if (Object.keys(rooms[roomCode].users).length === 0 && roomCode !== "690420") {
             delete rooms[roomCode];
         }
+
         socket.leave(roomCode);
         socket.emit('leftRoom', { roomCode, userId });
-        socket.to(roomCode).emit('userLeftRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users)});
+        if (rooms[roomCode]) {
+            socket.to(roomCode).emit('userLeftRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) });
+        }
     }
 }
 
