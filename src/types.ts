@@ -69,12 +69,13 @@ type GameUserEntity = {
   partitionKey?: string;
   rowKey?: string;
   timestamp?: string;
-  role?: string;
-  isWinner?: boolean;
   roleType?: string,
+  isWinner?: boolean;
+  isRevealed?: boolean;
   potentialRole1?: string,
-  potentialRole2: string,
+  potentialRole2?: string,
   startingRole?: string,
+  endingRole?: string;
 };
 
 

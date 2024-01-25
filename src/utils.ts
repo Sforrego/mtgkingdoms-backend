@@ -39,11 +39,12 @@ async function createGameUserEntities(gameId: string, room: Room, winnersIds: st
       partitionKey: gameId,
       rowKey: userId,
       roleType: user.role?.type,
-      role: user.role?.name,
       isWinner: winnersIds.includes(userId),
+      isRevealed: user.isRevealed,
       potentialRole1: potentialRoles[0]?.name,
       potentialRole2: potentialRoles[1]?.name,
       startingRole: user.startingRole?.name,
+      endingRole: user.role?.name,
     };
 
     await tableClients.gameUserClient.createEntity(userGame);
@@ -133,13 +134,13 @@ async function getUserData(userId: string, tableClient: TableClient): Promise<Us
           const userGame = {
           gameId: entity.partitionKey,
           userId: entity.rowKey,
-          role: entity.role as string,
+          timestamp: timestamp,
           roleType: entity.roleType as string,
+          isWinner: entity.isWinner as boolean,
           potentialRole1: entity.potentialRole1 as string,
           potentialRole2: entity.potentialRole2 as string,
           startingRole: entity.startingRole as string,
-          isWinner: entity.isWinner as boolean,
-          timestamp: timestamp
+          endingRole: entity.endingRole as string,
           };
           userGames.push(userGame);
       }
