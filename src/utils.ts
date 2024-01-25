@@ -4,14 +4,14 @@ import { Server as HttpServer } from 'http';
 import { Server as IoServer, Server } from 'socket.io';
 
 const roleOrder = ["Monarch", "Bandit", "Knight", "Bandit", "Renegade", "Noble", "Noble", "Bandit"];
+export const rolesType = ["Monarch", "Knight", "Bandit", "Renegade", "Noble"];
 
 function assignPlayerRoles(room: Room) {
-    const gameRoles: {[key: string]: Role[]} = getGameRoles(Object.keys(room.users).length, room);
+    const gameRoles: Role[][] = getGameRoles(Object.keys(room.users).length, room);
     const shuffledUsers: User[] = shuffleUsers([...Object.values(room.users)], room.previousMonarchUserId);
-    
     shuffledUsers.forEach((user, index) => {
       let currentUser: User = room.users[user.userId];
-      currentUser.potentialRoles = gameRoles[roleOrder[index]];
+      currentUser.potentialRoles = gameRoles[index]; 
     });
 }
 
@@ -32,81 +32,90 @@ async function createGameEntity(gameId: string, room: Room, tableClients: TableC
 
 async function createGameUserEntities(gameId: string, room: Room, winnersIds: string[], tableClients: TableClients) {
   for(let userId in room.users) {
+    let user = room.users[userId];
+    let potentialRoles = user.potentialRoles || [];
+
     let userGame = {
       partitionKey: gameId,
       rowKey: userId,
-      role: room.users[userId].role?.type,
-      isWinner: winnersIds.includes(userId)
-        };
-        await tableClients.gameUserClient.createEntity(userGame);
+      roleType: user.role?.type,
+      role: user.role?.name,
+      isWinner: winnersIds.includes(userId),
+      potentialRole1: potentialRoles[0]?.name,
+      potentialRole2: potentialRoles[1]?.name,
+      startingRole: user.startingRole?.name,
+    };
+
+    await tableClients.gameUserClient.createEntity(userGame);
     }
   }
   
+function jesterCheck(room: Room){
+  let jesterUser = Object.values(room.users).find(u => u.role?.name === "Jester");
+  if (jesterUser) {
+    let knightUser = Object.values(room.users).find(u => u.role?.type === "Knight");
+    if (knightUser && knightUser.role) {
+      knightUser.role.name = "Corrupted " + knightUser.role.name;
+      knightUser.role.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal." + (knightUser.role.ability?.replace("Monarch", "Jester") ?? "");
+    }
+  }
+}
+
 function generatePlayerTeamsAndStartGame(io: Server, room: Room) {
   var nobles = Object.values(room.users).filter(u => u.role?.type == "Noble").map(u => u.role);
+
+  jesterCheck(room);
+
   for (let userId in room.users){
-    let sendToUser = room.users[userId];
-    let teammates = getTeammates(Object.values(room.users), userId, sendToUser.role);
+    let user = room.users[userId];
+    if (user.role?.type === "Monarch"){
+      room.previousMonarchUserId = user.userId;
+      user.isRevealed = true;
+    } 
+
+    let teammates = getTeammates(Object.values(room.users), userId, user.role);
     if (!Array.isArray(teammates)) {
         teammates = [];
     }
 
     let team: User[] = [room.users[userId], ...teammates];
-    io.to(sendToUser.socketId).emit('gameStarted', { team: team, nobles: nobles });
+    io.to(user.socketId).emit('gameStarted', { team: team, nobles: nobles });
   }
 
   room.hasActiveGame = true;
   room.gameStartedAt = Date.now();
-  io.to(room.roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
-}
-
-function getPossibleRoles(io: Server, room: Room){
-  assignPlayerRoles(room);
-  Object.values(room.users).forEach(user => {
-    io.to(user.socketId).emit('selectYourCharacter', { potentialRoles: user.potentialRoles });
-  });
+  io.to(room.roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
 }
 
 function generateRoomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
-  
+
 function getGameRoles(numPlayers: number, room: Room) {
   let neededRoles = roleOrder.slice(0, numPlayers);
-  let possibleRoles: { [key: string]: Role[] } = {}; 
+  let possibleRoles: Role[][] = [];
   let roomSelectedRoles = [...room.selectedRoles]; 
-  let charactersPerRole = room.roleSelection? 2 : 1
+  shuffleArray(roomSelectedRoles);
+  let charactersPerRole = room.roleSelection ? 2 : 1;
+
   for (let roleType of neededRoles) {
-      let potentialRoles = roomSelectedRoles
-          .filter(role => role.type === roleType);
+    let potentialRoles = roomSelectedRoles.filter(role => role.type === roleType);
 
-      let chosenRoles = [];
-      while (chosenRoles.length < charactersPerRole && potentialRoles.length > 0) {
-        let roleIndex = Math.floor(Math.random() * potentialRoles.length);
-        let chosenRole = potentialRoles[roleIndex];
-        if (chosenRole) { 
-            chosenRoles.push(chosenRole);
-            potentialRoles.splice(roleIndex, 1); 
-        }
-    }
-    
-    while (chosenRoles.length < charactersPerRole) {
-        let additionalRole = potentialRoles.shift();
-        if (additionalRole) {
-            chosenRoles.push(additionalRole);
-        } else {
-            console.error(`Not enough roles to assign ${charactersPerRole} choices per player.`);
-            break;
-        }
-      }
+    let chosenRoles = [];
+    while (chosenRoles.length < charactersPerRole && potentialRoles.length > 0) {
+      let roleIndex = Math.floor(Math.random() * potentialRoles.length);
+      let chosenRole = potentialRoles.splice(roleIndex, 1)[0];
+      chosenRoles.push(chosenRole);
+      roomSelectedRoles = roomSelectedRoles.filter(role => role !== chosenRole);     
     }
 
-  // Don't perform Jester logic here, as players haven't chosen their roles yet
-  // don't assign previous game roles here: room.previousGameRoles = Object.values(assignedRoles)
-  //      if(roleOrder[index].type === "Monarch") {
-  //   room.previousMonarchUserId = user.userId;
-  //   currentUser.isRevealed = true;
-  // }
+    if (chosenRoles.length < charactersPerRole) {
+      console.error(`Not enough roles to assign ${charactersPerRole} choices per player for the role: ${roleType}.`);
+    }
+
+    possibleRoles.push(chosenRoles);
+  }
+
   return possibleRoles;
 }
 
@@ -125,6 +134,10 @@ async function getUserData(userId: string, tableClient: TableClient): Promise<Us
           gameId: entity.partitionKey,
           userId: entity.rowKey,
           role: entity.role as string,
+          roleType: entity.roleType as string,
+          potentialRole1: entity.potentialRole1 as string,
+          potentialRole2: entity.potentialRole2 as string,
+          startingRole: entity.startingRole as string,
           isWinner: entity.isWinner as boolean,
           timestamp: timestamp
           };
@@ -167,10 +180,10 @@ function calculateGameStatsSummary(gameEntities: any[]): GameStatsSummary {
   });
 
   for (const entity of gameEntities) {
-    if (entity.role && rolesType.includes(entity.role)) {
-      summary.rolesPlayed[entity.role]++;
+    if (entity.role && rolesType.includes(entity.roleType)) {
+      summary.rolesPlayed[entity.roleType]++;
       if (entity.isWinner) {
-        summary.winsPerRole[entity.role]++;
+        summary.winsPerRole[entity.roleType]++;
       }
     }
   }
@@ -234,6 +247,9 @@ function resetRoomInfo(io: Server, room: Room) {
         let user: User = room.users[userId];
         user.role = undefined;
         user.isRevealed = false;
+        user.startingRole = undefined;
+        user.potentialRoles = [];
+        user.hasSelectedRole = false;
         if(!user.isConnected){
             delete room.users[userId];
         }
@@ -243,18 +259,24 @@ function resetRoomInfo(io: Server, room: Room) {
     io.to(room.roomCode).emit('gameEnded', { users: sanitizeUserData(room.users) });
 }
 
-function sanitizeUserData(users: {[userId: string]: User}, userId?: string): SanitizedUser[] {
-    return Object.keys(users).map(id => {
-      const { role, ...rest } = users[id];
-      const sanitizedUser: SanitizedUser = rest;
-      if (id === userId) {
-        sanitizedUser.role = role;
-      }
-      else if (sanitizedUser.isRevealed){
-        sanitizedUser.role = role;
-      }
-      return sanitizedUser;
-    });
+function sanitizeUserData(users: { [userId: string]: User }, userId?: string): SanitizedUser[] {
+  return Object.keys(users).map(id => {
+    const user = users[id];
+    const sanitizedUser: SanitizedUser = {
+      ...user,
+      role: undefined,
+      potentialRoles: [],
+    };
+
+    if (id === userId) {
+      sanitizedUser.role = user.role;
+      sanitizedUser.potentialRoles = user.potentialRoles;
+    } else if (sanitizedUser.isRevealed) {
+      sanitizedUser.role = user.role;
+    }
+
+    return sanitizedUser;
+  });
 }
   
 function shuffleArray<T>(array: T[]): T[] {
@@ -276,8 +298,6 @@ function shuffleUsers(users: User[], previousMonarchUserId?: string): User[] {
     }
     return shuffledOtherUsers;
 }
-
-export const rolesType = ["Monarch", "Knight", "Bandit", "Renegade", "Noble"];
 
 export { assignPlayerRoles, createGameEntity, createGameUserEntities, 
         generateRoomCode, generatePlayerTeamsAndStartGame, getGameRoles, getUserData, getTeammates, gracefulShutdown, loadRoles, 

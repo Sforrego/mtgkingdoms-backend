@@ -24,6 +24,7 @@ function handleCreateRoom(socket:Socket, userId: string){
         roomCode: roomCode,
         allRolesSelected: false,
         roleSelection: true,
+        selectingRoles: false,
     };
 
     socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Send the room code back to the client
@@ -66,6 +67,7 @@ async function handleEndGame(io: Server, socket: Socket, roomCode: string, winne
             if (winnersIds.length > 0){
                 const gameId = v4();
                 createGameEntity(gameId, room, tableClients);
+                // add role usage data
                 await createGameUserEntities(gameId, room, winnersIds, tableClients);
             }
 
@@ -123,23 +125,24 @@ function handleLogin(socket: Socket, userId: string, username: string){
         user.isConnected = true;
         if (user.roomCode && rooms[user.roomCode]){
             let roomCode = user.roomCode;
+            let room = rooms[roomCode];
             socket.join(roomCode);
-            if (!rooms[roomCode].hasActiveGame){
-                rooms[roomCode].users[user.userId] = user;
-                socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) });
+            if (!room.hasActiveGame){
+                room.users[user.userId] = user;
+                socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(room.users) });
             } 
 
-            let userInRoom = rooms[roomCode].users[user.userId];
+            let userInRoom = room.users[user.userId];
 
             if(userInRoom){
-                let teammates: User[] = getTeammates(Object.values(rooms[roomCode].users), userId, userInRoom.role);
+                let teammates: User[] = getTeammates(Object.values(room.users), userId, userInRoom.role);
                 let team: User[] = [userInRoom, ...teammates];
-                socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(rooms[roomCode].users),
-                    activeGame: rooms[roomCode].hasActiveGame, roomCode: roomCode});
+                socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(room.users),
+                    activeGame: room.hasActiveGame, roomCode: roomCode });
             }
         }
     } else {
-        users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true };
+        users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true , hasSelectedRole: false, potentialRoles: []};
     }
 }
 
@@ -163,20 +166,29 @@ function handleRevealRole(io: Server, userId:string, roomCode: string){
         }
     }
 
-    io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(rooms[roomCode].users) });
+    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(rooms[roomCode].users) });
 }
 
 function handleStartGame(io: Server, socket: Socket, roomCode: string){
     try {
-        if(rooms[roomCode] && Object.keys(rooms[roomCode].users).length >= 4) {
+        if(rooms[roomCode] && Object.keys(rooms[roomCode].users).length >= 2) {
             console.log(`[${new Date().toISOString()}] Room ${roomCode} is starting a game.`);
             const room = rooms[roomCode];
             assignPlayerRoles(room);
             if (!room.roleSelection){
+                Object.values(room.users).forEach(user => {
+                    if (user.potentialRoles && user.potentialRoles.length > 0) {
+                      user.role = user.potentialRoles[0];
+                    } else {
+                      console.error("No potential roles available for user:", user);
+                    }
+                  });
+
                 generatePlayerTeamsAndStartGame(io, room);
             } else {
+                room.selectingRoles = true;
                 Object.values(room.users).forEach(user => {
-                    io.to(user.socketId).emit('selectYourCharacter', { potentialRoles: user.potentialRoles });
+                    io.to(user.socketId).emit('selectRole', { potentialRoles: user.potentialRoles });
                 });
             }
         } else {
@@ -188,19 +200,22 @@ function handleStartGame(io: Server, socket: Socket, roomCode: string){
     }
 }
 
-function handleSelectCharacter(io: Server, userId: string, roomCode: string, selectedRoleIndex: number) {
+function handleRoleSelected(io: Server, userId: string, roomCode: string, selectedRole: Role) {
     const room = rooms[roomCode];
     const user = room.users[userId];
-
-    if(user && user.potentialRoles && user.potentialRoles[selectedRoleIndex]) {
-        user.selectedRole = user.potentialRoles[selectedRoleIndex];
-        io.to(user.socketId).emit('characterSelected', { selectedRole: user.selectedRole });
-        const allSelected = Object.values(room.users).every(user => user.selectedRole);
+    if(selectedRole === null){
+        io.to(user.socketId).emit('error', 'Error when selecting character, no character provided.');
+    } else if(user && user.potentialRoles && user.potentialRoles.some(role => role.name === selectedRole.name)) {
+        user.role = selectedRole;
+        user.startingRole = selectedRole;
+        user.hasSelectedRole = true;
+        const allSelected = Object.values(room.users).every(user => user.role);
         room.allRolesSelected = allSelected;
         if(allSelected) {
+            room.selectingRoles = false;
             generatePlayerTeamsAndStartGame(io, room);
         } else {
-            io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
+            io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
         }
     }
     else {
@@ -212,7 +227,7 @@ function handleSelectCharacter(io: Server, userId: string, roomCode: string, sel
 function handleChosenOneDecision(io: Server, userId: string, roomCode: string, decision: string){
     let room = rooms[roomCode];
     room.users[userId].role = rolesCache.find(r => r.name == decision);
-    io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
+    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
 }
 
 function handleCultification(io: Server, userId: string, roomCode: string, cultistsIds: string[]){
@@ -225,7 +240,7 @@ function handleCultification(io: Server, userId: string, roomCode: string, culti
         }
     }
     
-    io.to(roomCode).emit('gameUpdated', { users: sanitizeUserData(room.users) });
+    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
 }
 
 export function attachSocketEvents(io: Server) {
@@ -242,7 +257,7 @@ export function attachSocketEvents(io: Server) {
         socket.on('login', ({ userId, username }) => handleLogin(socket, userId, username));
         socket.on('requestUserData', ({ userId }) => handleRequestUserData(socket, userId));
         socket.on('revealRole', ({ userId, roomCode }) => handleRevealRole(io, userId, roomCode));
-        socket.on('selectCharacter', ({ userId, roomCode, selectedRoleIndex }) => handleSelectCharacter(io, userId, roomCode, selectedRoleIndex));
+        socket.on('selectRole', ({ userId, roomCode, selectedRole }) => handleRoleSelected(io, userId, roomCode, selectedRole));
         socket.on('startGame', ({ roomCode }) => handleStartGame(io, socket, roomCode));
 
         socket.on('chosenOneDecision', ({ userId, roomCode, decision }) => handleChosenOneDecision(io, userId, roomCode, decision))

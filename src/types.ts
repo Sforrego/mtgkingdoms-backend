@@ -17,6 +17,7 @@ interface Room {
   selectedRoles: Role[];
   users: { [userId: string]: User };
   allRolesSelected: boolean;
+  selectingRoles: boolean;
 }
 
 interface User {
@@ -26,8 +27,9 @@ interface User {
   isConnected: boolean;
   isRevealed?: boolean;
   role?: Role;
-  potentialRoles?: Role[];
-  selectedRole?: Role;
+  potentialRoles: Role[];
+  startingRole?: Role;
+  hasSelectedRole: boolean;
   roomCode?: string;
 }
 
@@ -55,10 +57,10 @@ interface GameStatsSummary {
   gamesPlayed: number;
   wins: number;
   rolesPlayed: {
-      [roleName: string]: number;
+      [roleType: string]: number;
   };
   winsPerRole: {
-      [roleName: string]: number,
+      [roleType: string]: number,
   }
 };
 
@@ -69,6 +71,10 @@ type GameUserEntity = {
   timestamp?: string;
   role?: string;
   isWinner?: boolean;
+  roleType?: string,
+  potentialRole1?: string,
+  potentialRole2: string,
+  startingRole?: string,
 };
 
 
