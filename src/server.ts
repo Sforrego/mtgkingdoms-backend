@@ -4,7 +4,8 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { attachSocketEvents } from './socketEvents';
 import { port, tableClients } from './config';
-import { gracefulShutdown, loadRoles } from './utils';
+import { gracefulShutdown } from './utils';
+import { getAllRoles } from './dbOperations';
 import { rolesCache, rooms } from './state';
 
 dotenv.config();
@@ -24,7 +25,7 @@ const io = new Server(server, {
     }
 });
 
-loadRoles(rolesCache, tableClients.rolesClient);
+getAllRoles(rolesCache, tableClients.rolesClient);
 rooms["690420"].selectedRoles = rolesCache;
 attachSocketEvents(io);
 
@@ -36,5 +37,8 @@ process.on('SIGINT', () => {
   gracefulShutdown(io, server);
 });
 
-server.listen(port, () => console.log(`[${new Date().toISOString()}] Listening on port ${port}`));
-
+server.listen(port, () => {
+  console.log(`[${new Date().toISOString()}] Listening on port ${port}`);
+}).on('error', (e) => {
+  console.error(`Failed to start server: ${e.message}`);
+});

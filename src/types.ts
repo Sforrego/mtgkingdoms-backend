@@ -37,12 +37,6 @@ interface SanitizedUser extends Omit<User, 'role'> {
   role?: Role;
 }
 
-interface TableClients {
-  gameClient: TableClient,
-  gameUserClient: TableClient,
-  rolesClient: TableClient,
-}
-
 interface UserData {
   userId: string;
   statsPeriod: 'All time' | 'Last 10' | 'Last 5'  ;
@@ -57,19 +51,26 @@ interface GameStatsSummary {
   gamesPlayed: number;
   wins: number;
   rolesPlayed: {
-      [roleType: string]: number;
+    [roleType: string]: number;
   };
   winsPerRole: {
-      [roleType: string]: number,
+    [roleType: string]: number,
   }
 };
+
+interface TableClients {
+  gameClient: TableClient,
+  gameUserClient: TableClient,
+  rolesClient: TableClient,
+}
 
 type GameUserEntity = {
   etag: string;
   partitionKey?: string;
   rowKey?: string;
   timestamp?: string;
-  roleType?: string,
+  startingRoleType?: string,
+  endingRoleType?: string,
   isWinner?: boolean;
   isRevealed?: boolean;
   potentialRole1?: string,
