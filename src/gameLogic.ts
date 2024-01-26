@@ -34,8 +34,9 @@ function jesterCheck(room: Room){
   if (jesterUser) {
     let knightUser = Object.values(room.users).find(u => u.role?.type === "Knight");
     if (knightUser && knightUser.role) {
+      knightUser.role.type = "Renegade"
       knightUser.role.name = "Corrupted " + knightUser.role.name;
-      knightUser.role.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal." + (knightUser.role.ability?.replace("Monarch", "Jester") ?? "");
+      knightUser.role.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal." + (knightUser.role.ability?.replace(new RegExp("Monarch", 'g'), "Jester") ?? "");
     }
     console.log("asd");
   }

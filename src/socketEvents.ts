@@ -137,6 +137,13 @@ function handleLeaveRoom(socket: Socket, userId: string, roomCode: string){
     }
 }
 
+function handleUpdateRolesPool(io: Server, roles: Role[], roomCode: string){
+    if (rooms[roomCode]) {
+        rooms[roomCode].selectedRoles = roles;
+        io.to(roomCode).emit('rolesPoolUpdated', { roles });
+    }
+}
+
 // Game Management
 
 function handleStartGame(io: Server, socket: Socket, roomCode: string){
@@ -256,6 +263,7 @@ export function attachSocketEvents(io: Server) {
         socket.on('getRoles', async () => socket.emit('rolesData', rolesCache));
         socket.on('join', ({ userId, roomCode }) => handleJoinRoom(socket, userId, roomCode));
         socket.on('leaveRoom', ({ userId, roomCode }) => handleLeaveRoom(socket, userId, roomCode));
+        socket.on('updateRolesPool', ({ roles, roomCode }) => handleUpdateRolesPool(io, roles, roomCode));
        
         // Game management
         socket.on('startGame', ({ roomCode }) => handleStartGame(io, socket, roomCode));
