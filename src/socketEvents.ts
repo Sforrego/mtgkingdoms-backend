@@ -49,7 +49,7 @@ function handleDisconnect(socket: Socket){
         let room = rooms[roomCode];
         for (let userId in room.users) {
             if (room.users[userId].socketId === socket.id) {
-                if (room.hasActiveGame){
+                if (room.hasActiveGame || room.selectingRoles){
                     room.users[userId].isConnected = false;
                 } else {
                     delete room.users[userId];
@@ -96,6 +96,7 @@ function handleCreateRoom(socket:Socket, userId: string){
         allRolesSelected: false,
         roleSelection: true,
         selectingRoles: false,
+        previousGameRoles: []
     };
 
     socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Send the room code back to the client
@@ -174,6 +175,7 @@ function handleRoleSelected(io: Server, userId: string, roomCode: string, select
         user.role = selectedRole;
         user.startingRole = selectedRole;
         user.hasSelectedRole = true;
+        room.previousGameRoles.push(selectedRole);
         const allSelected = Object.values(room.users).every(user => user.role);
         room.allRolesSelected = allSelected;
         if(allSelected) {

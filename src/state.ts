@@ -9,7 +9,7 @@ export const rooms: Record<string, Room> = {
       hasActiveGame: false,
       gameStartedAt: undefined,
       previousMonarchUserId: undefined,
-      previousGameRoles: undefined,
+      previousGameRoles: [],
       roomCode: "690420",
       selectedRoles: [], 
       users: {},

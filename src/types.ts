@@ -11,7 +11,7 @@ interface Room {
   hasActiveGame: boolean;
   gameStartedAt?: number;
   previousMonarchUserId?: string;
-  previousGameRoles?: Role[];
+  previousGameRoles: Role[];
   roleSelection: boolean,
   roomCode: string;
   selectedRoles: Role[];

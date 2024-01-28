@@ -42,27 +42,42 @@ function jesterCheck(room: Room){
   }
 }
 
+function resetPreviousGameRoles(room: Room){
+  room.previousGameRoles = [];
+  for (let userId in room.users){
+  let user = room.users[userId];
+    if(user.role){
+      room.previousGameRoles.push(user.role)
+    }
+  }
+}
+
 function generatePlayerTeamsAndStartGame(io: Server, room: Room) {
   var nobles = Object.values(room.users).filter(u => u.role?.type == "Noble").map(u => u.role);
 
+  resetPreviousGameRoles(room);
   jesterCheck(room);
 
   for (let userId in room.users){
     let user = room.users[userId];
+    if(user.role){
+      room.previousGameRoles.push(user.role)
+    }
+
     if (user.role?.type === "Monarch"){
       room.previousMonarchUserId = user.userId;
       user.isRevealed = true;
     } 
-
+    
     let teammates = getTeammates(Object.values(room.users), userId, user.role);
     if (!Array.isArray(teammates)) {
-        teammates = [];
+      teammates = [];
     }
-
+    
     let team: User[] = [room.users[userId], ...teammates];
     io.to(user.socketId).emit('gameStarted', { team: team, nobles: nobles });
   }
-
+  
   room.hasActiveGame = true;
   room.gameStartedAt = Date.now();
   io.to(room.roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
@@ -71,26 +86,34 @@ function generatePlayerTeamsAndStartGame(io: Server, room: Room) {
 function getGameRoles(numPlayers: number, room: Room) {
   let neededRoles = ROLE_ORDER.slice(0, numPlayers);
   let possibleRoles: Role[][] = [];
-  let roomSelectedRoles = [...room.selectedRoles]; 
-  shuffle(roomSelectedRoles);
+  let roomSelectedRoles = [...room.selectedRoles];
   let charactersPerRole = room.roleSelection ? 2 : 1;
+  let previousRoles = room.previousGameRoles ? new Set(room.previousGameRoles.map(role => role.name)) : new Set();
 
   for (let roleType of neededRoles) {
-    let potentialRoles = roomSelectedRoles.filter(role => role.type === roleType);
+    // Filter out roles that were used in the previous game, if possible
+    let potentialRoles = roomSelectedRoles.filter(role => role.type === roleType && !previousRoles.has(role.name));
+    if (potentialRoles.length < charactersPerRole) {
+      // If not enough new roles, add roles from the previous game
+      let backupRoles = roomSelectedRoles.filter(role => role.type === roleType).filter(role => !potentialRoles.includes(role));
+      potentialRoles = [...potentialRoles, ...backupRoles];
+    }
 
     let chosenRoles = [];
     while (chosenRoles.length < charactersPerRole && potentialRoles.length > 0) {
       let roleIndex = Math.floor(Math.random() * potentialRoles.length);
       let chosenRole = potentialRoles.splice(roleIndex, 1)[0];
       chosenRoles.push(chosenRole);
-      roomSelectedRoles = roomSelectedRoles.filter(role => role !== chosenRole);     
+      // Ensure the chosen role is not selected again for another player
+      roomSelectedRoles = roomSelectedRoles.filter(role => role !== chosenRole);
     }
 
     if (chosenRoles.length < charactersPerRole) {
       console.error(`Not enough roles to assign ${charactersPerRole} choices per player for the role: ${roleType}.`);
+    } else {
+      // Store chosen roles in possibleRoles, preserving the order of the ROLE_ORDER array
+      possibleRoles.push(chosenRoles);
     }
-
-    possibleRoles.push(chosenRoles);
   }
 
   return possibleRoles;
@@ -102,13 +125,14 @@ function getTeammates(usersInRoom: User[], userId: string, role: Role | undefine
       if (role.type == "Bandit"){
         teammates = usersInRoom.filter(u => u.role?.type == "Bandit" && u.userId != userId)
       }
-      else if (role.type == "Knight"){
+      else if (role.name?.includes("Corrupted")){
         teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId)
       }
       else if (role.type == "Noble"){
         teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId)
       }
     }
+
     return teammates
 }
   
