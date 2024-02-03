@@ -4,7 +4,7 @@ import { v4 } from 'uuid';
 import { tableClients } from './config'
 import { getUserData, createGameEntity, createGameUserEntities } from './dbOperations';
 import { sanitizeUserData, getTeammates, setInitialPlayerRoles, startRoleSelection,
-         assignPlayerRolesOptions, generatePlayerTeamsAndStartGame, resetRoomInfo } from './gameLogic';
+         assignPlayerRolesOptions, generateTeams, preConfirmationActions, startGame, resetRoomInfo, startRoleConfirmation } from './gameLogic';
 import { rooms, users, rolesCache } from './state';
 import { User, UserData, Role } from './types';
 import { emitError, generateRoomCode } from './utils';
@@ -39,7 +39,7 @@ function handleLogin(socket: Socket, userId: string, username: string){
             }
         }
     } else {
-        users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true , hasSelectedRole: false, potentialRoles: []};
+        users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true , hasSelectedRole: false, hasConfirmedRole: false, potentialRoles: []};
     }
 }
 
@@ -49,7 +49,7 @@ function handleDisconnect(socket: Socket){
         let room = rooms[roomCode];
         for (let userId in room.users) {
             if (room.users[userId].socketId === socket.id) {
-                if (room.hasActiveGame || room.selectingRoles){
+                if (room.hasActiveGame || room.selectingRoles || room.confirmingRoles){
                     room.users[userId].isConnected = false;
                 } else {
                     delete room.users[userId];
@@ -96,6 +96,7 @@ function handleCreateRoom(socket:Socket, userId: string){
         allRolesSelected: false,
         roleSelection: true,
         selectingRoles: false,
+        confirmingRoles: false,
         previousGameRoles: []
     };
 
@@ -155,7 +156,9 @@ function handleStartGame(io: Server, socket: Socket, roomCode: string){
             assignPlayerRolesOptions(room);
             if (!room.roleSelection){
                 setInitialPlayerRoles(room);
-                generatePlayerTeamsAndStartGame(io, room);
+                generateTeams(io, room);
+                preConfirmationActions(room);
+                startGame(io, room);
             } else {
                 startRoleSelection(io, room);
             }
@@ -180,13 +183,26 @@ function handleRoleSelected(io: Server, userId: string, roomCode: string, select
         room.allRolesSelected = allSelected;
         if(allSelected) {
             room.selectingRoles = false;
-            generatePlayerTeamsAndStartGame(io, room);
+            generateTeams(io, room);
+            preConfirmationActions(room);
+            startRoleConfirmation(io, room);
         } else {
             io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
         }
     }
     else {
         io.to(user.socketId).emit('error', 'Error when selecting character.');
+    }
+}
+
+function handleRoleConfirmed(io: Server, userId: string, roomCode: string) {
+    const room = rooms[roomCode];
+    const user = room.users[userId];
+    user.hasConfirmedRole = true;
+    const allConfirmed = Object.values(room.users).every(user => user.hasConfirmedRole);
+    if(allConfirmed) {
+        room.confirmingRoles = false;
+        startGame(io, room);
     }
 }
 
@@ -278,6 +294,7 @@ export function attachSocketEvents(io: Server) {
         // Game management
         socket.on('startGame', ({ roomCode }) => handleStartGame(io, socket, roomCode));
         socket.on('selectRole', ({ userId, roomCode, selectedRole }) => handleRoleSelected(io, userId, roomCode, selectedRole));
+        socket.on('confirmRole', ({ userId, roomCode }) => handleRoleConfirmed(io, userId, roomCode));
         socket.on('revealRole', ({ userId, roomCode }) => handleRevealRole(io, userId, roomCode));
         socket.on('endGame', ({ roomCode, winnersIds }) => handleEndGame(io, socket, roomCode, winnersIds));
         

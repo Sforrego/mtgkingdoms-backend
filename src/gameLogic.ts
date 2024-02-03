@@ -29,6 +29,14 @@ function startRoleSelection(io: Server, room: Room) {
   });
 }
 
+function startRoleConfirmation(io: Server, room: Room) {
+  room.selectingRoles = false;
+  room.confirmingRoles = true;
+  Object.values(room.users).forEach(user => {
+      io.to(user.socketId).emit('confirmRole', { potentialRoles: user.potentialRoles });
+  });
+}
+
 function jesterCheck(room: Room){
   let jesterUser = Object.values(room.users).find(u => u.role?.name === "Jester");
   if (jesterUser) {
@@ -51,22 +59,12 @@ function resetPreviousGameRoles(room: Room){
   }
 }
 
-function generatePlayerTeamsAndStartGame(io: Server, room: Room) {
-  var nobles = Object.values(room.users).filter(u => u.role?.type == "Noble").map(u => u.role);
-
-  resetPreviousGameRoles(room);
-  jesterCheck(room);
-
+function generateTeams(io: Server, room: Room) {
   for (let userId in room.users){
     let user = room.users[userId];
     if(user.role){
       room.previousGameRoles.push(user.role)
     }
-
-    if (user.role?.type === "Monarch"){
-      room.previousMonarchUserId = user.userId;
-      user.isRevealed = true;
-    } 
     
     let teammates = getTeammates(Object.values(room.users), userId, user.role);
     if (!Array.isArray(teammates)) {
@@ -74,7 +72,25 @@ function generatePlayerTeamsAndStartGame(io: Server, room: Room) {
     }
     
     let team: User[] = [room.users[userId], ...teammates];
-    io.to(user.socketId).emit('gameStarted', { team: team, nobles: nobles });
+    user.team = team;
+  }
+}
+
+function preConfirmationActions(room: Room){
+  resetPreviousGameRoles(room);
+  jesterCheck(room);
+}
+
+function startGame(io: Server, room: Room) {
+  var nobles = Object.values(room.users).filter(u => u.role?.type == "Noble").map(u => u.role);
+
+  for (let userId in room.users){
+    let user = room.users[userId];
+    if (user.role?.type === "Monarch"){
+      room.previousMonarchUserId = user.userId;
+      user.isRevealed = true;
+    }
+    io.to(user.socketId).emit('gameStarted', { nobles: nobles });
   }
   
   room.hasActiveGame = true;
@@ -146,6 +162,7 @@ function resetRoomInfo(io: Server, room: Room) {
         user.startingRole = undefined;
         user.potentialRoles = [];
         user.hasSelectedRole = false;
+        user.hasConfirmedRole = false;
         if(!user.isConnected){
             delete room.users[userId];
         }
@@ -187,5 +204,5 @@ function sanitizeUserData(users: { [userId: string]: User }, userId?: string): S
     });
   }
 
-export { assignPlayerRolesOptions, setInitialPlayerRoles, startRoleSelection, generatePlayerTeamsAndStartGame, getGameRoles, getTeammates, resetRoomInfo, sanitizeUserData, shuffleUsers };
+export { assignPlayerRolesOptions, setInitialPlayerRoles, startRoleSelection, startRoleConfirmation, generateTeams, preConfirmationActions, startGame, getGameRoles, getTeammates, resetRoomInfo, sanitizeUserData, shuffleUsers };
 
