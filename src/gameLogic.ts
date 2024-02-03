@@ -38,7 +38,6 @@ function jesterCheck(room: Room){
       knightUser.role.name = "Corrupted " + knightUser.role.name;
       knightUser.role.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal." + (knightUser.role.ability?.replace(new RegExp("Monarch", 'g'), "Jester") ?? "");
     }
-    console.log("asd");
   }
 }
 
@@ -180,9 +179,7 @@ function sanitizeUserData(users: { [userId: string]: User }, userId?: string): S
       } else if (sanitizedUser.isRevealed) {
         sanitizedUser.role = user.role;
       }
-      
-      console.log(userId)
-      console.log(sanitizedUser)
+
       return sanitizedUser;
     });
   }

@@ -1,7 +1,7 @@
-import { GameUserEntity, GameStatsSummary, UserData, Role, Room, TableClients } from './types';
 import { TableClient } from '@azure/data-tables';
 
-export const rolesType = ["Monarch", "Knight", "Bandit", "Renegade", "Noble"];
+import { GameUserEntity, GameStatsSummary, UserData, Role, Room, TableClients } from './types';
+import { ROLES_TYPES } from './constants'
 
 async function createGameEntity(gameId: string, room: Room, tableClients: TableClients) {
     let game = {
@@ -48,16 +48,16 @@ function calculateGameStatsSummary(gameEntities: any[]): GameStatsSummary {
       winsPerRole: {},
     };
   
-    rolesType.forEach(role => {
+    ROLES_TYPES.forEach(role => {
       summary.rolesPlayed[role] = 0;
       summary.winsPerRole[role] = 0;
     });
   
     for (const entity of gameEntities) {
-      if (entity.role && rolesType.includes(entity.roleType)) {
-        summary.rolesPlayed[entity.roleType]++;
+      if (ROLES_TYPES.includes(entity.startingRoleType)) {
+        summary.rolesPlayed[entity.startingRoleType]++;
         if (entity.isWinner) {
-          summary.winsPerRole[entity.roleType]++;
+          summary.winsPerRole[entity.startingRoleType]++;
         }
       }
     }
