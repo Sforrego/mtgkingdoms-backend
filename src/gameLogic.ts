@@ -124,11 +124,14 @@ function getTeammates(usersInRoom: User[], userId: string, role: Role | undefine
       if (role.type == "Bandit"){
         teammates = usersInRoom.filter(u => u.role?.type == "Bandit" && u.userId != userId)
       }
-      else if (role.name?.includes("Corrupted")){
-        teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId)
+      else if (role.type == "Knight"){
+        teammates = usersInRoom.filter(u => u.role?.type == "Monarch" && u.userId != userId)
       }
       else if (role.type == "Noble"){
         teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId)
+      }
+      else if (role.name?.includes("Corrupted")){
+        teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId)
       }
     }
 

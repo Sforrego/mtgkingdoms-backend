@@ -251,6 +251,14 @@ function handleCultification(io: Server, userId: string, roomCode: string, culti
     io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
 }
 
+function handleConceal(io: Server, userId: string, roomCode: string){
+    let room = rooms[roomCode];
+    let user = rooms[roomCode].users[userId];
+    user.isRevealed = false;
+
+    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
+}
+
 export function attachSocketEvents(io: Server) {
     io.on('connection', (socket) => {
         console.log(`[${new Date().toISOString()}] New client connected`);
@@ -274,6 +282,7 @@ export function attachSocketEvents(io: Server) {
         socket.on('endGame', ({ roomCode, winnersIds }) => handleEndGame(io, socket, roomCode, winnersIds));
         
         // Role specific functions
+        socket.on('conceal', ({ userId, roomCode }) => handleConceal(io, userId, roomCode))
         socket.on('chosenOneDecision', ({ userId, roomCode, decision }) => handleChosenOneDecision(io, userId, roomCode, decision))
         socket.on('cultification', ({ userId, roomCode, cultistsIds }) => handleCultification(io, userId, roomCode, cultistsIds))
         
