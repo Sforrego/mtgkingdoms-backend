@@ -16,6 +16,6 @@ export const rooms: Record<string, Room> = {
       roleSelection: true,
       allRolesSelected: false,
       selectingRoles: false,
-      confirmingRoles: false
+      confirmingTeam: false
     }
   };  

@@ -29,11 +29,12 @@ function startRoleSelection(io: Server, room: Room) {
   });
 }
 
-function startRoleConfirmation(io: Server, room: Room) {
+function startTeamConfirmation(io: Server, room: Room) {
   room.selectingRoles = false;
-  room.confirmingRoles = true;
+  room.confirmingTeam = true;
   Object.values(room.users).forEach(user => {
-      io.to(user.socketId).emit('confirmRole', { potentialRoles: user.potentialRoles });
+    let team: User[] = Object.values(room.users).filter(u => user.teamIds?.includes(u.userId));
+    io.to(user.socketId).emit('reviewTeam', { team });
   });
 }
 
@@ -66,13 +67,13 @@ function generateTeams(io: Server, room: Room) {
       room.previousGameRoles.push(user.role)
     }
     
-    let teammates = getTeammates(Object.values(room.users), userId, user.role);
-    if (!Array.isArray(teammates)) {
-      teammates = [];
+    let teammatesIds = getTeammatesIds(Object.values(room.users), userId, user.role);
+    if (!Array.isArray(teammatesIds)) {
+      teammatesIds = [];
     }
     
-    let team: User[] = [room.users[userId], ...teammates];
-    user.team = team;
+    let teamIds: string[] = [userId, ...teammatesIds];
+    user.teamIds = teamIds;
   }
 }
 
@@ -134,20 +135,20 @@ function getGameRoles(numPlayers: number, room: Room) {
   return possibleRoles;
 }
 
-function getTeammates(usersInRoom: User[], userId: string, role: Role | undefined): User[] {
-    let teammates: User[] = [];
+function getTeammatesIds(usersInRoom: User[], userId: string, role: Role | undefined): string[] {
+    let teammates: string[] = [];
     if(role){
       if (role.type == "Bandit"){
-        teammates = usersInRoom.filter(u => u.role?.type == "Bandit" && u.userId != userId)
+        teammates = usersInRoom.filter(u => u.role?.type == "Bandit" && u.userId != userId).map(u => u.userId);
       }
       else if (role.type == "Knight"){
-        teammates = usersInRoom.filter(u => u.role?.type == "Monarch" && u.userId != userId)
+        teammates = usersInRoom.filter(u => u.role?.type == "Monarch" && u.userId != userId).map(u => u.userId);
       }
       else if (role.type == "Noble"){
-        teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId)
+        teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId).map(u => u.userId);
       }
       else if (role.name?.includes("Corrupted")){
-        teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId)
+        teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId).map(u => u.userId);
       }
     }
 
@@ -162,7 +163,7 @@ function resetRoomInfo(io: Server, room: Room) {
         user.startingRole = undefined;
         user.potentialRoles = [];
         user.hasSelectedRole = false;
-        user.hasConfirmedRole = false;
+        user.hasReviewedTeam = false;
         if(!user.isConnected){
             delete room.users[userId];
         }
@@ -204,5 +205,5 @@ function sanitizeUserData(users: { [userId: string]: User }, userId?: string): S
     });
   }
 
-export { assignPlayerRolesOptions, setInitialPlayerRoles, startRoleSelection, startRoleConfirmation, generateTeams, preConfirmationActions, startGame, getGameRoles, getTeammates, resetRoomInfo, sanitizeUserData, shuffleUsers };
+export { assignPlayerRolesOptions, setInitialPlayerRoles, startRoleSelection, startTeamConfirmation, generateTeams, preConfirmationActions, startGame, getGameRoles, getTeammatesIds, resetRoomInfo, sanitizeUserData, shuffleUsers };
 

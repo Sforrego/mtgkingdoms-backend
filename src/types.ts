@@ -18,7 +18,7 @@ interface Room {
   users: { [userId: string]: User };
   allRolesSelected: boolean;
   selectingRoles: boolean;
-  confirmingRoles: boolean;
+  confirmingTeam: boolean;
 }
 
 interface User {
@@ -31,9 +31,9 @@ interface User {
   potentialRoles: Role[];
   startingRole?: Role;
   hasSelectedRole: boolean;
-  hasConfirmedRole: boolean;
+  hasReviewedTeam: boolean;
   roomCode?: string;
-  team?: User[];
+  teamIds?: string[];
 }
 
 interface SanitizedUser extends Omit<User, 'role'> {
