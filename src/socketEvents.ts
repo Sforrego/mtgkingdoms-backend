@@ -32,8 +32,7 @@ function handleLogin(socket: Socket, userId: string, username: string){
             let userInRoom = room.users[user.userId];
 
             if(userInRoom){
-                let teammatesIds: string[] = getTeammatesIds(Object.values(room.users), userId, userInRoom.role);
-                let team: User[] = Object.values(room.users).filter(u => teammatesIds.includes(u.userId));
+                let team: User[] = Object.values(room.users).filter(u => user.teamIds?.includes(u.userId));
                 socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(room.users, userId),
                     activeGame: room.hasActiveGame, roomCode: roomCode });
             }
