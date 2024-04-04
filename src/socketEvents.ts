@@ -38,7 +38,7 @@ function handleLogin(socket: Socket, userId: string, username: string){
             }
         }
     } else {
-        users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true , hasSelectedRole: false, hasReviewedTeam: false, potentialRoles: []};
+        users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true , hasSelectedRole: false, hasReviewedTeam: false, potentialRoles: [], isRevealed: false};
     }
 }
 
@@ -154,9 +154,9 @@ function handleStartGame(io: Server, socket: Socket, roomCode: string){
             const room = rooms[roomCode];
             assignPlayerRolesOptions(room);
             if (!room.roleSelection){
+                preConfirmationActions(room);
                 setInitialPlayerRoles(room);
                 generateTeams(io, room);
-                preConfirmationActions(room);
                 startGame(io, room);
             } else {
                 startRoleSelection(io, room);
@@ -182,11 +182,8 @@ function handleRoleSelected(io: Server, userId: string, roomCode: string, select
         room.allRolesSelected = allSelected;
         if(allSelected) {
             room.selectingRoles = false;
-            console.log("generating teams...")
-            generateTeams(io, room);
-            console.log("generating teams...done")
             preConfirmationActions(room);
-            console.log("preconfirm actions done")
+            generateTeams(io, room);
             startTeamConfirmation(io, room);
         } else {
             io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
