@@ -165,12 +165,13 @@ function resetRoomInfo(io: Server, room: Room) {
         user.hasSelectedRole = false;
         user.hasReviewedTeam = false;
         if(!user.isConnected){
+            room.users[userId].roomCode = undefined;
             delete room.users[userId];
         }
     }
 
     room.hasActiveGame = false;
-    io.to(room.roomCode).emit('gameEnded', { users: sanitizeUserData(room.users) });
+    io.to(room.roomCode).emit('gameEnded', { usersInRoom: sanitizeUserData(room.users) });
 }
   
 function shuffleUsers(users: User[], previousMonarchUserId?: string): User[] {

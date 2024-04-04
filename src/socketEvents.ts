@@ -13,33 +13,64 @@ const DEFAULT_ROOM_CODE = "690420";
 
 // User Management
 
-function handleLogin(socket: Socket, userId: string, username: string){
-    console.log(`[${new Date().toISOString()}] User ${userId} with socketId ${socket.id} logged in`)
+function handleLogin(socket: any, userId: string, username: string): void {
+    console.log(`[${new Date().toISOString()}] User ${userId} with socketId ${socket.id} logged in`);
+    let eventPayload = {
+        userId,
+        username,
+        isConnected: true,
+        roomCode: null as string | null,
+        team: [] as User[],
+        usersInRoom: [] as User[],
+        activeGame: false,
+        selectingRole: false,
+        reviewingTeam: false,
+        potentialRoles: [] as Role[],
+        isRevealed: false as boolean | undefined
+    };
+
     if (users[userId]) {
         let user: User = users[userId];
         user.socketId = socket.id;
         user.username = username;
         user.isConnected = true;
-        if (user.roomCode && rooms[user.roomCode]){
+
+        if (user.roomCode && rooms[user.roomCode]) {
             let roomCode = user.roomCode;
             let room = rooms[roomCode];
             socket.join(roomCode);
-            if (!room.hasActiveGame){
+            eventPayload.roomCode = roomCode;
+            eventPayload.activeGame = room.hasActiveGame;
+            eventPayload.selectingRole = room.selectingRoles;
+            eventPayload.reviewingTeam = room.confirmingTeam;
+            eventPayload.potentialRoles = user.potentialRoles;
+            eventPayload.isRevealed = user.isRevealed;
+
+            if (!room.hasActiveGame) {
                 room.users[user.userId] = user;
-                socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(room.users) });
-            } 
+                eventPayload.usersInRoom = Object.values(room.users);
+                socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) });
+            }
 
             let userInRoom = room.users[user.userId];
-
-            if(userInRoom){
-                let team: User[] = Object.values(room.users).filter(u => user.teamIds?.includes(u.userId));
-                socket.emit('reconnectedToRoom', {team: team, usersInRoom: sanitizeUserData(room.users, userId),
-                    roomCode: roomCode, activeGame: room.hasActiveGame, selectingRole: room.selectingRoles, reviewingTeam: room.confirmingTeam});
+            if (userInRoom && user.teamIds) {
+                eventPayload.team = Object.values(room.users).filter(u => user.teamIds?.includes(u.userId));
             }
         }
     } else {
-        users[userId] = { userId: userId, socketId: socket.id, username: username, isConnected: true , hasSelectedRole: false, hasReviewedTeam: false, potentialRoles: [], isRevealed: false};
+        users[userId] = {
+            userId: userId,
+            socketId: socket.id,
+            username: username,
+            isConnected: true,
+            hasSelectedRole: false,
+            hasReviewedTeam: false,
+            potentialRoles: [],
+            isRevealed: false
+        };
     }
+
+    socket.emit('loginStatus', eventPayload);
 }
 
 function handleDisconnect(socket: Socket){
@@ -54,7 +85,7 @@ function handleDisconnect(socket: Socket){
                     delete room.users[userId];
                 }
 
-                socket.to(roomCode).emit('userDisconnected', { roomCode, users: room.users });
+                socket.to(roomCode).emit('userLeftRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) });
                 if (Object.keys(room.users).length === 0 && roomCode != DEFAULT_ROOM_CODE) {
                     delete rooms[roomCode];
                 }
@@ -113,7 +144,7 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
             user.roomCode = roomCode;
             rooms[roomCode].users[userId] = user
             socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId), selectedRoles: rooms[roomCode].selectedRoles }); // Confirm the join event to the joining client
-            socket.to(roomCode).emit('userJoinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Inform all other clients in the room
+            socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) }); // Inform all other clients in the room
             console.log(`[${new Date().toISOString()}] User ${userId} has joined the room ${roomCode}`);
         }
     } else {
@@ -133,7 +164,7 @@ function handleLeaveRoom(socket: Socket, userId: string, roomCode: string){
         socket.leave(roomCode);
         socket.emit('leftRoom', { roomCode, userId });
         if (rooms[roomCode]) {
-            socket.to(roomCode).emit('userLeftRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users) });
+            socket.to(roomCode).emit('userLeftRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) });
         }
     }
 }
