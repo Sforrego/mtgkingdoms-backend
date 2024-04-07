@@ -25,7 +25,7 @@ const io = new Server(server, {
     }
 });
 
-await getAllRoles(rolesCache, mainRoles, tableClients.rolesClient);
+getAllRoles(rolesCache, mainRoles, tableClients.rolesClient);
 rooms["690420"].selectedRoles = mainRoles;
 rooms["012345"].selectedRoles = mainRoles;
 attachSocketEvents(io);
