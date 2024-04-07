@@ -1,7 +1,9 @@
-import { shuffle } from 'lodash';
-import {  Role, User, SanitizedUser, Room } from './types';
+import lodash from 'lodash';
+import {  Role, User, SanitizedUser, Room } from './types.js';
 import { Server } from 'socket.io';
-import { ROLE_ORDER } from './constants'
+import { ROLE_ORDER } from './constants.js'
+
+const { shuffle } = lodash;
 
 function assignPlayerRolesOptions(room: Room) {
     const gameRoles: Role[][] = getGameRoles(Object.keys(room.users).length, room);

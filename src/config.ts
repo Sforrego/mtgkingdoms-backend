@@ -1,5 +1,5 @@
 import { TableClient } from '@azure/data-tables';
-import { TableClients } from './types';
+import { TableClients } from './types.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

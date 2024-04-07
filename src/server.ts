@@ -2,11 +2,11 @@ import dotenv from 'dotenv';
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
-import { attachSocketEvents } from './socketEvents';
-import { port, tableClients } from './config';
-import { gracefulShutdown } from './utils';
-import { getAllRoles } from './dbOperations';
-import { rolesCache, rooms } from './state';
+import { attachSocketEvents } from './socketEvents.js';
+import { port, tableClients } from './config.js';
+import { gracefulShutdown } from './utils.js';
+import { getAllRoles } from './dbOperations.js';
+import { rolesCache, mainRoles, rooms } from './state.js';
 
 dotenv.config();
 const app = express();
@@ -25,8 +25,9 @@ const io = new Server(server, {
     }
 });
 
-getAllRoles(rolesCache, tableClients.rolesClient);
-rooms["690420"].selectedRoles = rolesCache;
+await getAllRoles(rolesCache, mainRoles, tableClients.rolesClient);
+rooms["690420"].selectedRoles = mainRoles;
+rooms["012345"].selectedRoles = mainRoles;
 attachSocketEvents(io);
 
 process.on('SIGTERM', () => {

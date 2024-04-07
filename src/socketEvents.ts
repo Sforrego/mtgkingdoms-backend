@@ -1,13 +1,13 @@
 import { Server, Socket } from 'socket.io';
 import { v4 } from 'uuid';
 
-import { tableClients } from './config'
-import { getUserData, createGameEntity, createGameUserEntities } from './dbOperations';
-import { sanitizeUserData, getTeammatesIds, setInitialPlayerRoles, startRoleSelection,
-         assignPlayerRolesOptions, generateTeams, preConfirmationActions, startGame, resetRoomInfo, startTeamConfirmation } from './gameLogic';
-import { rooms, users, rolesCache } from './state';
-import { User, UserData, Role } from './types';
-import { emitError, generateRoomCode } from './utils';
+import { tableClients } from './config.js'
+import { getUserData, createGameEntity, createGameUserEntities } from './dbOperations.js';
+import { sanitizeUserData, setInitialPlayerRoles, startRoleSelection, startTeamConfirmation,
+         assignPlayerRolesOptions, generateTeams, preConfirmationActions, startGame, resetRoomInfo } from './gameLogic.js';
+import { rooms, users, rolesCache, mainRoles } from './state.js';
+import { User, UserData, Role } from './types.js';
+import { emitError, generateRoomCode } from './utils.js';
 
 const DEFAULT_ROOM_CODE = "690420";
 
@@ -121,7 +121,7 @@ function handleCreateRoom(socket:Socket, userId: string){
         [userId]: user
         },
         hasActiveGame: false,
-        selectedRoles: rolesCache,
+        selectedRoles: mainRoles,
         roomCode: roomCode,
         allRolesSelected: false,
         roleSelection: true,
@@ -130,7 +130,7 @@ function handleCreateRoom(socket:Socket, userId: string){
         previousGameRoles: []
     };
 
-    socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users) }); // Send the room code back to the client
+    socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users), selectedRoles: rooms[roomCode].selectedRoles }); // Send the room code back to the client
     console.log(`[${new Date().toISOString()}] User ${userId} has created the room ${roomCode}`)
 }
 

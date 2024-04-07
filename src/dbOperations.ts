@@ -1,7 +1,7 @@
 import { TableClient } from '@azure/data-tables';
 
-import { GameUserEntity, GameStatsSummary, UserData, Role, Room, TableClients } from './types';
-import { ROLES_TYPES } from './constants'
+import { GameUserEntity, GameStatsSummary, UserData, Role, Room, TableClients } from './types.js';
+import { ROLES_TYPES } from './constants.js'
 
 async function createGameEntity(gameId: string, room: Room, tableClients: TableClients) {
     let game = {
@@ -113,7 +113,7 @@ async function getUserData(userId: string, tableClient: TableClient): Promise<Us
     }
 }
 
-async function getAllRoles(rolesCache: Role[], rolesClient: TableClient) {
+async function getAllRoles(rolesCache: Role[], mainRoles: Role[], rolesClient: TableClient) {
     try {
         const entities = rolesClient.listEntities();
         rolesCache.splice(0, rolesCache.length);
@@ -131,7 +131,8 @@ async function getAllRoles(rolesCache: Role[], rolesClient: TableClient) {
             const specificOrder = ["Monarch", "Knight", "Bandit", "Renegade", "Noble", "SubRole"];
             return specificOrder.indexOf(a.type!) - specificOrder.indexOf(b.type!);
         });
-    } 
+        mainRoles.splice(0, mainRoles.length, ...rolesCache.filter(role => role.type !== 'SubRole'));
+      } 
     catch (error) {
         console.log(`[${new Date().toISOString()}] Error occurred while loading roles: ${error}`);
     }
