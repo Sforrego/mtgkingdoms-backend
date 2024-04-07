@@ -96,8 +96,6 @@ function startGame(io: Server, room: Room) {
     io.to(user.socketId).emit('gameStarted', { nobles: nobles });
   }
   
-  room.hasActiveGame = true;
-  room.gameStartedAt = Date.now();
   io.to(room.roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
 }
 

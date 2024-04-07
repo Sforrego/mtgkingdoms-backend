@@ -183,6 +183,8 @@ function handleStartGame(io: Server, socket: Socket, roomCode: string){
         if(rooms[roomCode] && Object.keys(rooms[roomCode].users).length >= 2) {
             console.log(`[${new Date().toISOString()}] Room ${roomCode} is starting a game.`);
             const room = rooms[roomCode];
+            room.hasActiveGame = true;
+            room.gameStartedAt = Date.now();
             assignPlayerRolesOptions(room);
             if (!room.roleSelection){
                 preConfirmationActions(room);
