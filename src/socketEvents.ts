@@ -45,6 +45,7 @@ function handleLogin(socket: any, userId: string, username: string): void {
             eventPayload.reviewingTeam = room.confirmingTeam;
             eventPayload.potentialRoles = user.potentialRoles;
             eventPayload.isRevealed = user.isRevealed;
+            eventPayload.usersInRoom = sanitizeUserData(rooms[roomCode].users)
 
             if (!room.hasActiveGame) {
                 room.users[user.userId] = user;
