@@ -149,7 +149,7 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
             console.log(`[${new Date().toISOString()}] User ${userId} has joined the room ${roomCode}`);
         }
     } else {
-        socket.emit('error', 'Room does not exist.'); // Send an error message back to the client
+        socket.emit('error', `Room ${roomCode} does not exist.`); // Send an error message back to the client
     }
 }
 

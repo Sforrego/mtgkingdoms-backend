@@ -165,7 +165,6 @@ function resetRoomInfo(io: Server, room: Room) {
         user.hasSelectedRole = false;
         user.hasReviewedTeam = false;
         if(!user.isConnected){
-            room.users[userId].roomCode = undefined;
             delete room.users[userId];
         }
     }
