@@ -26,8 +26,8 @@ const io = new Server(server, {
 });
 
 getAllRoles(rolesCache, mainRoles, tableClients.rolesClient);
-rooms["690420"].selectedRoles = mainRoles;
-rooms["012345"].selectedRoles = mainRoles;
+rooms["690420"].selectedRolesPool = mainRoles;
+rooms["012345"].selectedRolesPool = mainRoles;
 attachSocketEvents(io);
 
 process.on('SIGTERM', () => {

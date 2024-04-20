@@ -102,7 +102,7 @@ function startGame(io: Server, room: Room) {
 function getGameRoles(numPlayers: number, room: Room) {
   let neededRoles = ROLE_ORDER.slice(0, numPlayers);
   let possibleRoles: Role[][] = [];
-  let roomSelectedRoles = [...room.selectedRoles];
+  let roomSelectedRoles = [...room.selectedRolesPool];
   let charactersPerRole = room.roleSelection ? 2 : 1;
   let previousRoles = room.previousGameRoles ? new Set(room.previousGameRoles.map(role => role.name)) : new Set();
 

@@ -23,6 +23,7 @@ function handleLogin(socket: any, userId: string, username: string): void {
         team: [] as User[],
         usersInRoom: [] as User[],
         activeGame: false,
+        selectedRolesPool: [] as Role[],
         selectingRole: false,
         reviewingTeam: false,
         potentialRoles: [] as Role[],
@@ -41,6 +42,7 @@ function handleLogin(socket: any, userId: string, username: string): void {
             socket.join(roomCode);
             eventPayload.roomCode = roomCode;
             eventPayload.activeGame = room.hasActiveGame;
+            eventPayload.selectedRolesPool = room.selectedRolesPool;
             eventPayload.selectingRole = room.selectingRoles;
             eventPayload.reviewingTeam = room.confirmingTeam;
             eventPayload.potentialRoles = user.potentialRoles;
@@ -122,7 +124,7 @@ function handleCreateRoom(socket:Socket, userId: string){
         [userId]: user
         },
         hasActiveGame: false,
-        selectedRoles: mainRoles,
+        selectedRolesPool: mainRoles,
         roomCode: roomCode,
         allRolesSelected: false,
         roleSelection: true,
@@ -131,7 +133,7 @@ function handleCreateRoom(socket:Socket, userId: string){
         previousGameRoles: []
     };
 
-    socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users), selectedRoles: rooms[roomCode].selectedRoles }); // Send the room code back to the client
+    socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users), selectedRoles: rooms[roomCode].selectedRolesPool }); // Send the room code back to the client
     console.log(`[${new Date().toISOString()}] User ${userId} has created the room ${roomCode}`)
 }
 
@@ -144,7 +146,7 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
             let user: User = users[userId];
             user.roomCode = roomCode;
             rooms[roomCode].users[userId] = user
-            socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId), selectedRoles: rooms[roomCode].selectedRoles }); // Confirm the join event to the joining client
+            socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId), selectedRoles: rooms[roomCode].selectedRolesPool }); // Confirm the join event to the joining client
             socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) }); // Inform all other clients in the room
             console.log(`[${new Date().toISOString()}] User ${userId} has joined the room ${roomCode}`);
         }
@@ -172,7 +174,7 @@ function handleLeaveRoom(socket: Socket, userId: string, roomCode: string){
 
 function handleUpdateRolesPool(io: Server, roles: Role[], roomCode: string){
     if (rooms[roomCode]) {
-        rooms[roomCode].selectedRoles = roles;
+        rooms[roomCode].selectedRolesPool = roles;
         io.to(roomCode).emit('rolesPoolUpdated', { roles });
     }
 }

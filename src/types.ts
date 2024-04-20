@@ -8,16 +8,16 @@ interface Role {
 }
 
 interface Room {
-  hasActiveGame: boolean;
-  gameStartedAt?: number;
-  previousMonarchUserId?: string;
-  previousGameRoles: Role[];
-  roleSelection: boolean,
   roomCode: string;
-  selectedRoles: Role[];
   users: { [userId: string]: User };
-  allRolesSelected: boolean;
+  selectedRolesPool: Role[];
+  previousGameRoles: Role[];
+  previousMonarchUserId?: string;
+  gameStartedAt?: number;
+  hasActiveGame: boolean;
+  roleSelection: boolean, // Defines if a room has the option to select between two roles, default is true.
   selectingRoles: boolean;
+  allRolesSelected: boolean;
   confirmingTeam: boolean;
 }
 
@@ -26,13 +26,13 @@ interface User {
   username: string;
   socketId: string;
   isConnected: boolean;
+  roomCode?: string;
   isRevealed?: boolean;
-  role?: Role;
   potentialRoles: Role[];
   startingRole?: Role;
+  role?: Role;
   hasSelectedRole: boolean;
   hasReviewedTeam: boolean;
-  roomCode?: string;
   teamIds?: string[];
 }
 
