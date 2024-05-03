@@ -211,7 +211,7 @@ function handleRoleSelected(io: Server, userId: string, roomCode: string, select
         io.to(user.socketId).emit('error', 'Error when selecting character, no character provided.');
     } else if(user && user.potentialRoles && user.potentialRoles.some(role => role.name === selectedRole.name)) {
         user.role = selectedRole;
-        user.startingRole = selectedRole;
+        user.startingRole = JSON.parse(JSON.stringify(selectedRole));
         user.hasSelectedRole = true;
         room.previousGameRoles.push(selectedRole);
         const allSelected = Object.values(room.users).every(user => user.role);
