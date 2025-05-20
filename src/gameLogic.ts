@@ -6,12 +6,12 @@ import { ROLE_ORDER } from './constants.js'
 const { shuffle } = lodash;
 
 function assignPlayerRolesOptions(room: Room) {
-    const gameRoles: Role[][] = getGameRoles(Object.keys(room.users).length, room);
-    const shuffledUsers: User[] = shuffleUsers([...Object.values(room.users)], room.previousMonarchUserId);
-    shuffledUsers.forEach((user, index) => {
-      let currentUser: User = room.users[user.userId];
-      currentUser.potentialRoles = gameRoles[index]; 
-    });
+  const gameRoles: Role[][] = getGameRoles(Object.keys(room.users).length, room);
+  const shuffledUsers: User[] = shuffleUsers([...Object.values(room.users)], room.previousMonarchUserId);
+  shuffledUsers.forEach((user, index) => {
+    let currentUser: User = room.users[user.userId];
+    currentUser.potentialRoles = gameRoles[index]; 
+  });
 }
 
 function setInitialPlayerRoles(room: Room) {
@@ -86,7 +86,7 @@ function preConfirmationActions(room: Room){
 
 function startGame(io: Server, room: Room) {
   var nobles = Object.values(room.users).filter(u => u.role?.type == "Noble").map(u => u.role);
-
+  room.gameStartedAt = Date.now();
   for (let userId in room.users){
     let user = room.users[userId];
     if (user.role?.type === "Monarch"){
@@ -136,53 +136,54 @@ function getGameRoles(numPlayers: number, room: Room) {
 }
 
 function getTeammatesIds(usersInRoom: User[], userId: string, role: Role | undefined): string[] {
-    let teammates: string[] = [];
-    if(role){
-      if (role.type == "Bandit"){
-        teammates = usersInRoom.filter(u => u.role?.type == "Bandit" && u.userId != userId).map(u => u.userId);
-      }
-      else if (role.type == "Knight"){
-        teammates = usersInRoom.filter(u => u.role?.type == "Monarch" && u.userId != userId).map(u => u.userId);
-      }
-      else if (role.type == "Noble"){
-        teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId).map(u => u.userId);
-      }
-      else if (role.name?.includes("Corrupted")){
-        teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId).map(u => u.userId);
-      }
+  let teammates: string[] = [];
+  if(role){
+    if (role.type == "Bandit"){
+      teammates = usersInRoom.filter(u => u.role?.type == "Bandit" && u.userId != userId).map(u => u.userId);
     }
+    else if (role.type == "Knight"){
+      teammates = usersInRoom.filter(u => u.role?.type == "Monarch" && u.userId != userId).map(u => u.userId);
+    }
+    else if (role.type == "Noble"){
+      teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId).map(u => u.userId);
+    }
+    else if (role.name?.includes("Corrupted")){
+      teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId).map(u => u.userId);
+    }
+  }
 
-    return teammates
+  return teammates
 }
   
 function resetRoomInfo(io: Server, room: Room) {
-    for(let userId in room.users){
-        let user: User = room.users[userId];
-        user.role = undefined;
-        user.isRevealed = false;
-        user.startingRole = undefined;
-        user.potentialRoles = [];
-        user.hasSelectedRole = false;
-        user.hasReviewedTeam = false;
-        if(!user.isConnected){
-            delete room.users[userId];
-        }
+  for(let userId in room.users){
+    let user: User = room.users[userId];
+    user.role = undefined;
+    user.isRevealed = false;
+    user.startingRole = undefined;
+    user.potentialRoles = [];
+    user.hasSelectedRole = false;
+    user.hasReviewedTeam = false;
+    if(!user.isConnected){
+      delete room.users[userId];
     }
-
-    room.hasActiveGame = false;
-    io.to(room.roomCode).emit('gameEnded', { usersInRoom: sanitizeUserData(room) });
+  }
+  
+  room.gameStartedAt = undefined;
+  room.hasActiveGame = false;
+  io.to(room.roomCode).emit('gameEnded', { usersInRoom: sanitizeUserData(room) });
 }
   
 function shuffleUsers(users: User[], previousMonarchUserId?: string): User[] {
-    let otherUsers: User[] = users.filter(user => user.userId !== previousMonarchUserId);
-    let shuffledOtherUsers: User[] = shuffle([...otherUsers]);
-    if(previousMonarchUserId !== null) {
-      let previousMonarchUser = users.find(user => user.userId === previousMonarchUserId);
-      if(previousMonarchUser !== undefined) {
-        shuffledOtherUsers.push(previousMonarchUser);
-      }
+  let otherUsers: User[] = users.filter(user => user.userId !== previousMonarchUserId);
+  let shuffledOtherUsers: User[] = shuffle([...otherUsers]);
+  if(previousMonarchUserId !== null) {
+    let previousMonarchUser = users.find(user => user.userId === previousMonarchUserId);
+    if(previousMonarchUser !== undefined) {
+      shuffledOtherUsers.push(previousMonarchUser);
     }
-    return shuffledOtherUsers;
+  }
+  return shuffledOtherUsers;
 }
 
 function sanitizeRole(role?: Role): Role {
@@ -192,25 +193,25 @@ function sanitizeRole(role?: Role): Role {
 }
 
 function sanitizeUserData(room: Room, userId?: string): SanitizedUser[] {
-    const users = room.users;
-    return Object.keys(users).map(id => {
-      const user = users[id];
-      const sanitizedUser: SanitizedUser = {
-        ...user,
-        role: room.withRevealedRoles ? sanitizeRole(user.role) : undefined,
-        potentialRoles: [],
-      };
-  
-      if (id === userId) {
-        sanitizedUser.role = user.role;
-        sanitizedUser.potentialRoles = user.potentialRoles;
-      } else if (sanitizedUser.isRevealed) {
-        sanitizedUser.role = user.role;
-      }
+  const users = room.users;
+  return Object.keys(users).map(id => {
+    const user = users[id];
+    const sanitizedUser: SanitizedUser = {
+      ...user,
+      role: room.withRevealedRoles && room.gameStartedAt ? sanitizeRole(user.role) : undefined,
+      potentialRoles: [],
+    };
 
-      return sanitizedUser;
-    });
-  }
+    if (id === userId) {
+      sanitizedUser.role = user.role;
+      sanitizedUser.potentialRoles = user.potentialRoles;
+    } else if (sanitizedUser.isRevealed) {
+      sanitizedUser.role = user.role;
+    }
+
+    return sanitizedUser;
+  });
+}
 
 
 export { assignPlayerRolesOptions, setInitialPlayerRoles, startRoleSelection, startTeamConfirmation, generateTeams, preConfirmationActions, startGame, getGameRoles, getTeammatesIds, resetRoomInfo, sanitizeUserData, shuffleUsers };
