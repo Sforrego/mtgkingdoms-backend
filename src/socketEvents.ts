@@ -9,7 +9,7 @@ import { rooms, users, rolesCache, mainRoles } from './state.js';
 import { User, UserData, Role } from './types.js';
 import { emitError, generateRoomCode } from './utils.js';
 
-const DEFAULT_ROOM_CODE = "690420";
+const DEFAULT_ROOM_CODE = ["690420", "012345"];
 
 // User Management
 
@@ -89,7 +89,7 @@ function handleDisconnect(socket: Socket){
                 }
 
                 socket.to(roomCode).emit('userLeftRoom', { usersInRoom: sanitizeUserData(rooms[roomCode]) });
-                if (Object.keys(room.users).length === 0 && roomCode != DEFAULT_ROOM_CODE) {
+                if (Object.keys(room.users).length === 0 && !DEFAULT_ROOM_CODE.includes(roomCode)) {
                     delete rooms[roomCode];
                 }
 
@@ -161,7 +161,7 @@ function handleLeaveRoom(socket: Socket, userId: string, roomCode: string){
     if (rooms[roomCode]) {
         rooms[roomCode].users[userId].roomCode = undefined;
         delete rooms[roomCode].users[userId];
-        if (Object.keys(rooms[roomCode].users).length === 0 && roomCode !== DEFAULT_ROOM_CODE) {
+        if (Object.keys(rooms[roomCode].users).length === 0 && !DEFAULT_ROOM_CODE.includes(roomCode)) {
             delete rooms[roomCode];
         }
 
