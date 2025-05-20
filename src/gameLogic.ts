@@ -96,7 +96,7 @@ function startGame(io: Server, room: Room) {
     io.to(user.socketId).emit('gameStarted', { nobles: nobles });
   }
   
-  io.to(room.roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
+  io.to(room.roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room) });
 }
 
 function getGameRoles(numPlayers: number, room: Room) {
@@ -170,7 +170,7 @@ function resetRoomInfo(io: Server, room: Room) {
     }
 
     room.hasActiveGame = false;
-    io.to(room.roomCode).emit('gameEnded', { usersInRoom: sanitizeUserData(room.users) });
+    io.to(room.roomCode).emit('gameEnded', { usersInRoom: sanitizeUserData(room) });
 }
   
 function shuffleUsers(users: User[], previousMonarchUserId?: string): User[] {
@@ -185,12 +185,19 @@ function shuffleUsers(users: User[], previousMonarchUserId?: string): User[] {
     return shuffledOtherUsers;
 }
 
-function sanitizeUserData(users: { [userId: string]: User }, userId?: string): SanitizedUser[] {
+function sanitizeRole(role?: Role): Role {
+  return {
+    type: role?.type,
+  };
+}
+
+function sanitizeUserData(room: Room, userId?: string): SanitizedUser[] {
+    const users = room.users;
     return Object.keys(users).map(id => {
       const user = users[id];
       const sanitizedUser: SanitizedUser = {
         ...user,
-        role: undefined,
+        role: room.withRevealedRoles ? sanitizeRole(user.role) : undefined,
         potentialRoles: [],
       };
   
@@ -204,6 +211,7 @@ function sanitizeUserData(users: { [userId: string]: User }, userId?: string): S
       return sanitizedUser;
     });
   }
+
 
 export { assignPlayerRolesOptions, setInitialPlayerRoles, startRoleSelection, startTeamConfirmation, generateTeams, preConfirmationActions, startGame, getGameRoles, getTeammatesIds, resetRoomInfo, sanitizeUserData, shuffleUsers };
 

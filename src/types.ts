@@ -19,6 +19,7 @@ interface Room {
   selectingRoles: boolean;
   allRolesSelected: boolean;
   confirmingTeam: boolean;
+  withRevealedRoles: boolean;
 }
 
 interface User {

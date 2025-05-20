@@ -17,7 +17,8 @@ export const rooms: Record<string, Room> = {
       roleSelection: true,
       allRolesSelected: false,
       selectingRoles: false,
-      confirmingTeam: false
+      confirmingTeam: false,
+      withRevealedRoles: false
     },
     "012345": {
       hasActiveGame: false,
@@ -27,9 +28,10 @@ export const rooms: Record<string, Room> = {
       roomCode: "012345",
       selectedRolesPool: [], 
       users: {},
-      roleSelection: false,
+      roleSelection: true,
       allRolesSelected: false,
       selectingRoles: false,
-      confirmingTeam: false
+      confirmingTeam: false,
+      withRevealedRoles: true
     },
   };  

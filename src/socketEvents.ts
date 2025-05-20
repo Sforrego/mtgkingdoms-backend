@@ -47,12 +47,12 @@ function handleLogin(socket: any, userId: string, username: string): void {
             eventPayload.reviewingTeam = room.confirmingTeam;
             eventPayload.potentialRoles = user.potentialRoles;
             eventPayload.isRevealed = user.isRevealed;
-            eventPayload.usersInRoom = sanitizeUserData(rooms[roomCode].users)
+            eventPayload.usersInRoom = sanitizeUserData(rooms[roomCode])
 
             if (!room.hasActiveGame) {
                 room.users[user.userId] = user;
                 eventPayload.usersInRoom = Object.values(room.users);
-                socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) });
+                socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode]) });
             }
 
             let userInRoom = room.users[user.userId];
@@ -88,7 +88,7 @@ function handleDisconnect(socket: Socket){
                     delete room.users[userId];
                 }
 
-                socket.to(roomCode).emit('userLeftRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) });
+                socket.to(roomCode).emit('userLeftRoom', { usersInRoom: sanitizeUserData(rooms[roomCode]) });
                 if (Object.keys(room.users).length === 0 && roomCode != DEFAULT_ROOM_CODE) {
                     delete rooms[roomCode];
                 }
@@ -130,10 +130,11 @@ function handleCreateRoom(socket:Socket, userId: string){
         roleSelection: true,
         selectingRoles: false,
         confirmingTeam: false,
-        previousGameRoles: []
+        previousGameRoles: [],
+        withRevealedRoles: false,
     };
 
-    socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode].users), selectedRoles: rooms[roomCode].selectedRolesPool }); // Send the room code back to the client
+    socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode]), selectedRoles: rooms[roomCode].selectedRolesPool }); // Send the room code back to the client
     console.log(`[${new Date().toISOString()}] User ${userId} has created the room ${roomCode}`)
 }
 
@@ -146,8 +147,8 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
             let user: User = users[userId];
             user.roomCode = roomCode;
             rooms[roomCode].users[userId] = user
-            socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode].users, userId), selectedRoles: rooms[roomCode].selectedRolesPool }); // Confirm the join event to the joining client
-            socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) }); // Inform all other clients in the room
+            socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode], userId), selectedRoles: rooms[roomCode].selectedRolesPool }); // Confirm the join event to the joining client
+            socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode]) }); // Inform all other clients in the room
             console.log(`[${new Date().toISOString()}] User ${userId} has joined the room ${roomCode}`);
         }
     } else {
@@ -167,7 +168,7 @@ function handleLeaveRoom(socket: Socket, userId: string, roomCode: string){
         socket.leave(roomCode);
         socket.emit('leftRoom', { roomCode, userId });
         if (rooms[roomCode]) {
-            socket.to(roomCode).emit('userLeftRoom', { usersInRoom: sanitizeUserData(rooms[roomCode].users) });
+            socket.to(roomCode).emit('userLeftRoom', { usersInRoom: sanitizeUserData(rooms[roomCode]) });
         }
     }
 }
@@ -222,7 +223,7 @@ function handleRoleSelected(io: Server, userId: string, roomCode: string, select
             generateTeams(io, room);
             startTeamConfirmation(io, room);
         } else {
-            io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
+            io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room) });
         }
     }
     else {
@@ -240,7 +241,7 @@ function handleTeamConfirmed(io: Server, userId: string, roomCode: string) {
         room.confirmingTeam = false;
         startGame(io, room);
     } else {
-        io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
+        io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room) });
     }
 }
 
@@ -259,7 +260,7 @@ function handleRevealRole(io: Server, userId:string, roomCode: string){
         }
     }
 
-    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(rooms[roomCode].users) });
+    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(rooms[roomCode]) });
 }
 
 async function handleEndGame(io: Server, socket: Socket, roomCode: string, winnersIds: string[]){
@@ -286,12 +287,6 @@ async function handleEndGame(io: Server, socket: Socket, roomCode: string, winne
 
 // Specific Renegade functions
 
-function handleChosenOneDecision(io: Server, userId: string, roomCode: string, decision: string){
-    let room = rooms[roomCode];
-    room.users[userId].role = rolesCache.find(r => r.name == decision);
-    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
-}
-
 function handleCultification(io: Server, userId: string, roomCode: string, cultistsIds: string[]){
     let room = rooms[roomCode];
     let cultistRole = rolesCache.find(r => r.name == "Cultist");
@@ -302,7 +297,7 @@ function handleCultification(io: Server, userId: string, roomCode: string, culti
         }
     }
     
-    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
+    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room) });
 }
 
 function handleConceal(io: Server, userId: string, roomCode: string){
@@ -310,7 +305,7 @@ function handleConceal(io: Server, userId: string, roomCode: string){
     let user = rooms[roomCode].users[userId];
     user.isRevealed = false;
 
-    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room.users) });
+    io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room) });
 }
 
 export function attachSocketEvents(io: Server) {
@@ -338,7 +333,6 @@ export function attachSocketEvents(io: Server) {
         
         // Role specific functions
         socket.on('conceal', ({ userId, roomCode }) => handleConceal(io, userId, roomCode))
-        socket.on('chosenOneDecision', ({ userId, roomCode, decision }) => handleChosenOneDecision(io, userId, roomCode, decision))
         socket.on('cultification', ({ userId, roomCode, cultistsIds }) => handleCultification(io, userId, roomCode, cultistsIds))
         
         socket.on('error', (error) => console.log(`[${new Date().toISOString()}] Socket error:${error}`));
