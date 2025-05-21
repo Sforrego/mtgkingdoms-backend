@@ -15,6 +15,7 @@ const DEFAULT_ROOM_CODE = ["690420", "012345"];
 
 function handleLogin(socket: any, userId: string, username: string): void {
     console.log(`[${new Date().toISOString()}] User ${userId} with socketId ${socket.id} logged in`);
+    console.log(`[${new Date().toISOString()}] User ${username} with socketId ${socket.id} logged in`);
     let eventPayload = {
         userId,
         username,
@@ -74,6 +75,40 @@ function handleLogin(socket: any, userId: string, username: string): void {
     }
 
     socket.emit('loginStatus', eventPayload);
+}
+
+function handleGuestLogin(socket: Socket, username: string) {
+    const userId = `guest-${v4()}`; // mark clearly as guest
+    console.log(`[${new Date().toISOString()}] Guest ${userId} with socketId ${socket.id} connected`);
+    console.log(`[${new Date().toISOString()}] Guest ${username} with socketId ${socket.id} connected`);
+    const guestUser: User = {
+        userId,
+        socketId: socket.id,
+        username,
+        isConnected: true,
+        hasSelectedRole: false,
+        hasReviewedTeam: false,
+        potentialRoles: [],
+        isRevealed: false
+    };
+
+    users[userId] = guestUser;
+
+    socket.emit('loginStatus', {
+        userId,
+        username,
+        isConnected: true,
+        roomCode: null,
+        team: [],
+        usersInRoom: [],
+        activeGame: false,
+        selectedRolesPool: [],
+        selectingRole: false,
+        reviewingTeam: false,
+        potentialRoles: [],
+        isRevealed: false,
+        isGuest: true
+    });
 }
 
 function handleDisconnect(socket: Socket){
@@ -271,7 +306,10 @@ async function handleEndGame(io: Server, socket: Socket, roomCode: string, winne
                 const gameId = v4();
                 createGameEntity(gameId, room, tableClients);
                 // add role usage data
-                await createGameUserEntities(gameId, room, winnersIds, tableClients);
+                const persistentUsers = Object.values(room.users).filter(u => !u.userId.startsWith("guest-"));
+                if (persistentUsers.length > 0) {
+                    await createGameUserEntities(gameId, room, winnersIds, tableClients);
+                }
             }
 
             resetRoomInfo(io, room);
@@ -313,6 +351,7 @@ export function attachSocketEvents(io: Server) {
 
         // User management
         socket.on('login', ({ userId, username }) => handleLogin(socket, userId, username));
+        socket.on("guestLogin", (username: string) => handleGuestLogin(socket, username));
         socket.on('disconnect', () => handleDisconnect(socket));
         socket.on('requestUserData', ({ userId }) => handleRequestUserData(socket, userId));
        
