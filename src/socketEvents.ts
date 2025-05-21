@@ -215,6 +215,13 @@ function handleUpdateRolesPool(io: Server, roles: Role[], roomCode: string){
     }
 }
 
+function handleToggleRevealedRoles(io: Server, roomCode: string, withRevealedRoles: boolean){
+    if (rooms[roomCode]) {
+        rooms[roomCode].withRevealedRoles = withRevealedRoles;
+        io.to(roomCode).emit("updateRevealedRolesSetting", { withRevealedRoles });
+    }
+}
+
 // Game Management
 
 function handleStartGame(io: Server, socket: Socket, roomCode: string){
@@ -354,14 +361,15 @@ export function attachSocketEvents(io: Server) {
         socket.on("guestLogin", (username: string) => handleGuestLogin(socket, username));
         socket.on('disconnect', () => handleDisconnect(socket));
         socket.on('requestUserData', ({ userId }) => handleRequestUserData(socket, userId));
-       
+
         // Room management
         socket.on('create', ({ userId }) => handleCreateRoom(socket, userId));
         socket.on('getRoles', async () => socket.emit('rolesData', rolesCache));
         socket.on('join', ({ userId, roomCode }) => handleJoinRoom(socket, userId, roomCode));
         socket.on('leaveRoom', ({ userId, roomCode }) => handleLeaveRoom(socket, userId, roomCode));
         socket.on('updateRolesPool', ({ roles, roomCode }) => handleUpdateRolesPool(io, roles, roomCode));
-       
+        socket.on("toggleRevealedRoles", ({ roomCode, withRevealedRoles }) => handleToggleRevealedRoles(io, roomCode, withRevealedRoles));
+
         // Game management
         socket.on('startGame', ({ roomCode }) => handleStartGame(io, socket, roomCode));
         socket.on('selectRole', ({ userId, roomCode, selectedRole }) => handleRoleSelected(io, userId, roomCode, selectedRole));
