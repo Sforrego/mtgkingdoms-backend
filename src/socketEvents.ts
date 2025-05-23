@@ -182,7 +182,8 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
             let user: User = users[userId];
             user.roomCode = roomCode;
             rooms[roomCode].users[userId] = user
-            socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode], userId), selectedRoles: rooms[roomCode].selectedRolesPool }); // Confirm the join event to the joining client
+            socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode], userId), selectedRoles: rooms[roomCode].selectedRolesPool, 
+                withRevealedRoles: rooms[roomCode].withRevealedRoles }); // Confirm the join event to the joining client
             socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode]) }); // Inform all other clients in the room
             console.log(`[${new Date().toISOString()}] User ${userId} has joined the room ${roomCode}`);
         }
