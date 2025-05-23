@@ -5,6 +5,8 @@ interface Role {
   image?: string;
   name?: string;
   type?: string;
+  enabled?: boolean;
+  revealedMode?: string;
 }
 
 interface Room {

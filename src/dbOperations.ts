@@ -8,6 +8,7 @@ async function createGameEntity(gameId: string, room: Room, tableClients: TableC
       partitionKey: gameId,
           rowKey: new Date().toISOString(),
           gameLength: '', 
+          revealedRoles: room.withRevealedRoles,
         };
         let gameStartTime = room.gameStartedAt;
         if (gameStartTime){
@@ -117,23 +118,30 @@ async function getAllRoles(rolesCache: Role[], mainRoles: Role[], rolesClient: T
     try {
         const entities = rolesClient.listEntities();
         rolesCache.splice(0, rolesCache.length);
+
         for await (const entity of entities) {
+            const isEnabled = entity.Enabled === true || entity.Enabled === "true";
+
+            if (!isEnabled) continue; // Skip roles that are not enabled
+
             const role = {
-            name: entity.partitionKey,
-            type: entity.rowKey,
-            image: entity.ImageUrl as string,
-            ability: entity.Ability as string
+                name: entity.partitionKey,
+                type: entity.rowKey,
+                image: entity.ImageUrl as string,
+                ability: entity.Ability as string,
+                revealedMode: entity.RevealedMode as string,
             };
+
             rolesCache.push(role);
         }
-  
+
         rolesCache.sort((a, b) => {
             const specificOrder = ["Monarch", "Knight", "Bandit", "Renegade", "Noble", "SubRole"];
             return specificOrder.indexOf(a.type!) - specificOrder.indexOf(b.type!);
         });
+
         mainRoles.splice(0, mainRoles.length, ...rolesCache.filter(role => role.type !== 'SubRole'));
-      } 
-    catch (error) {
+    } catch (error) {
         console.log(`[${new Date().toISOString()}] Error occurred while loading roles: ${error}`);
     }
 }

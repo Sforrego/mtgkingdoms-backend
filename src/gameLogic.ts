@@ -69,7 +69,7 @@ function generateTeams(io: Server, room: Room) {
       room.previousGameRoles.push(user.role)
     }
     
-    let teammatesIds = getTeammatesIds(Object.values(room.users), userId, user.role);
+    let teammatesIds = getTeammatesIds(Object.values(room.users), userId, user.role, room.withRevealedRoles);
     if (!Array.isArray(teammatesIds)) {
       teammatesIds = [];
     }
@@ -108,10 +108,25 @@ function getGameRoles(numPlayers: number, room: Room) {
 
   for (let roleType of neededRoles) {
     // Filter out roles that were used in the previous game, if possible
-    let potentialRoles = roomSelectedRoles.filter(role => role.type === roleType && !previousRoles.has(role.name));
+    let potentialRoles = roomSelectedRoles.filter(role =>
+      role.type === roleType &&
+      !previousRoles.has(role.name) &&
+      (
+        (room.withRevealedRoles && (role.revealedMode === "revealed" || role.revealedMode === "both")) ||
+        (!room.withRevealedRoles && (role.revealedMode === "hidden" || role.revealedMode === "both"))
+      )
+    );
+
     if (potentialRoles.length < charactersPerRole) {
       // If not enough new roles, add roles from the previous game
-      let backupRoles = roomSelectedRoles.filter(role => role.type === roleType).filter(role => !potentialRoles.includes(role));
+      let backupRoles = roomSelectedRoles.filter(role =>
+        role.type === roleType &&
+        !potentialRoles.includes(role) &&
+        (
+          (room.withRevealedRoles && (role.revealedMode === "revealed" || role.revealedMode === "both")) ||
+          (!room.withRevealedRoles && (role.revealedMode === "hidden" || role.revealedMode === "both"))
+        )
+      );
       potentialRoles = [...potentialRoles, ...backupRoles];
     }
 
@@ -135,7 +150,7 @@ function getGameRoles(numPlayers: number, room: Room) {
   return possibleRoles;
 }
 
-function getTeammatesIds(usersInRoom: User[], userId: string, role: Role | undefined): string[] {
+function getTeammatesIds(usersInRoom: User[], userId: string, role: Role | undefined, withRevealedRoles: boolean): string[] {
   let teammates: string[] = [];
   if(role){
     if (role.type == "Bandit"){
@@ -143,6 +158,9 @@ function getTeammatesIds(usersInRoom: User[], userId: string, role: Role | undef
     }
     else if (role.type == "Knight"){
       teammates = usersInRoom.filter(u => u.role?.type == "Monarch" && u.userId != userId).map(u => u.userId);
+    }
+    else if (role.type == "Monarch" && withRevealedRoles){
+      teammates = usersInRoom.filter(u => u.role?.type == "Knight" && u.userId != userId).map(u => u.userId);
     }
     else if (role.type == "Noble"){
       teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId).map(u => u.userId);

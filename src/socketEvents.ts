@@ -28,7 +28,8 @@ function handleLogin(socket: any, userId: string, username: string): void {
         selectingRole: false,
         reviewingTeam: false,
         potentialRoles: [] as Role[],
-        isRevealed: false as boolean | undefined
+        isRevealed: false as boolean | undefined,
+        withRevealedRoles: false as boolean | undefined,
     };
 
     if (users[userId]) {
@@ -48,6 +49,7 @@ function handleLogin(socket: any, userId: string, username: string): void {
             eventPayload.reviewingTeam = room.confirmingTeam;
             eventPayload.potentialRoles = user.potentialRoles;
             eventPayload.isRevealed = user.isRevealed;
+            eventPayload.withRevealedRoles = room.withRevealedRoles;
             eventPayload.usersInRoom = sanitizeUserData(rooms[roomCode])
 
             if (!room.hasActiveGame) {
