@@ -7,6 +7,7 @@ interface Role {
   type?: string;
   enabled?: boolean;
   revealedMode?: string;
+  startsRevealed?: boolean;
 }
 
 interface Room {

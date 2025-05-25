@@ -130,6 +130,7 @@ async function getAllRoles(rolesCache: Role[], mainRoles: Role[], rolesClient: T
                 image: entity.ImageUrl as string,
                 ability: entity.Ability as string,
                 revealedMode: entity.RevealedMode as string,
+                startsRevealed: entity.StartsRevealed === true || entity.StartsRevealed === "true",
             };
 
             rolesCache.push(role);

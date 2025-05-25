@@ -91,8 +91,12 @@ function startGame(io: Server, room: Room) {
     let user = room.users[userId];
     if (user.role?.type === "Monarch"){
       room.previousMonarchUserId = user.userId;
+    }
+
+    if (user.role?.startsRevealed){
       user.isRevealed = true;
     }
+
     io.to(user.socketId).emit('gameStarted', { nobles: nobles });
   }
   
