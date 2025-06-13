@@ -40,18 +40,6 @@ function startTeamConfirmation(io: Server, room: Room) {
   });
 }
 
-function jesterCheck(room: Room){
-  let jesterUser = Object.values(room.users).find(u => u.role?.name === "Jester");
-  if (jesterUser) {
-    let knightUser = Object.values(room.users).find(u => u.role?.type === "Knight");
-    if (knightUser && knightUser.role) {
-      knightUser.role.type = "Renegade"
-      knightUser.role.name = "Corrupted " + knightUser.role.name;
-      knightUser.role.ability = "You serve the Jester.\n When you Reveal the Jester is forced to Reveal." + (knightUser.role.ability?.replace(new RegExp("Monarch", 'g'), "Jester") ?? "");
-    }
-  }
-}
-
 function resetPreviousGameRoles(room: Room){
   room.previousGameRoles = [];
   for (let userId in room.users){
@@ -81,7 +69,6 @@ function generateTeams(io: Server, room: Room) {
 
 function preConfirmationActions(room: Room){
   resetPreviousGameRoles(room);
-  jesterCheck(room);
 }
 
 function startGame(io: Server, room: Room) {
@@ -97,7 +84,8 @@ function startGame(io: Server, room: Room) {
       user.isRevealed = true;
     }
 
-    io.to(user.socketId).emit('gameStarted', { nobles: nobles });
+    let team: User[] = Object.values(room.users).filter(u => user.teamIds?.includes(u.userId));
+    io.to(user.socketId).emit('gameStarted', { team: team, nobles: nobles });
   }
   
   io.to(room.roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room) });
@@ -168,9 +156,6 @@ function getTeammatesIds(usersInRoom: User[], userId: string, role: Role | undef
     }
     else if (role.type == "Noble"){
       teammates = usersInRoom.filter(u => u.role?.type == "Noble" && u.userId != userId).map(u => u.userId);
-    }
-    else if (role.name?.includes("Corrupted")){
-      teammates = usersInRoom.filter(u => u.role?.name == "Jester" && u.userId != userId).map(u => u.userId);
     }
   }
 
