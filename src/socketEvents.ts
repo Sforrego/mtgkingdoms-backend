@@ -27,7 +27,7 @@ function handleLogin(socket: any, userId: string, username: string): void {
         selectingRole: false,
         potentialRoles: [] as Role[],
         isRevealed: false as boolean | undefined,
-        withRevealedRoles: false as boolean | undefined,
+        withRevealedRoles: true as boolean | undefined,
     };
 
     if (users[userId]) {
