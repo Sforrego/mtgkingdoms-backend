@@ -25,7 +25,6 @@ function handleLogin(socket: any, userId: string, username: string): void {
         activeGame: false,
         selectedRolesPool: [] as Role[],
         selectingRole: false,
-        reviewingTeam: false,
         potentialRoles: [] as Role[],
         isRevealed: false as boolean | undefined,
         withRevealedRoles: false as boolean | undefined,
@@ -45,7 +44,6 @@ function handleLogin(socket: any, userId: string, username: string): void {
             eventPayload.activeGame = room.hasActiveGame;
             eventPayload.selectedRolesPool = room.selectedRolesPool;
             eventPayload.selectingRole = room.selectingRoles;
-            eventPayload.reviewingTeam = room.confirmingTeam;
             eventPayload.potentialRoles = user.potentialRoles;
             eventPayload.isRevealed = user.isRevealed;
             eventPayload.withRevealedRoles = room.withRevealedRoles;
@@ -105,7 +103,6 @@ function handleGuestLogin(socket: Socket, username: string) {
         activeGame: false,
         selectedRolesPool: [],
         selectingRole: false,
-        reviewingTeam: false,
         potentialRoles: [],
         isRevealed: false,
         isGuest: true
