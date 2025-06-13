@@ -84,7 +84,8 @@ function startGame(io: Server, room: Room) {
       user.isRevealed = true;
     }
 
-    let team: User[] = Object.values(room.users).filter(u => user.teamIds?.includes(u.userId));
+    let teammates = user.teamIds ?? [];
+    let team: User[] = [user, ...teammates.filter(id => id !== user.userId).map(id => room.users[id])];
     io.to(user.socketId).emit('gameStarted', { team: team, nobles: nobles });
   }
   
