@@ -1,37 +1,39 @@
 import { Room, User, Role } from './types.js';
-
+import { DEFAULT_ROOM_CODE } from './constants.js';
 // Global state for users, roles, and rooms
 export const users: Record<string, User> = {};
 export const rolesCache: Role[] = [];
 export const mainRoles: Role[] = [];
 export const rooms: Record<string, Room> = {
     // Default room setup
-    "690420": {
+    [DEFAULT_ROOM_CODE[0]]: {
       hasActiveGame: false,
       gameStartedAt: undefined,
       previousMonarchUserId: undefined,
       previousGameRoles: [],
-      roomCode: "690420",
+      roomCode: DEFAULT_ROOM_CODE[0],
       selectedRolesPool: [], 
       users: {},
       roleSelection: true,
       allRolesSelected: false,
       selectingRoles: false,
       confirmingTeam: false,
-      withRevealedRoles: true
+      withRevealedRoles: true,
+      inactivityCleanupTimer: undefined
     },
-    "012345": {
+    [DEFAULT_ROOM_CODE[1]]: {
       hasActiveGame: false,
       gameStartedAt: undefined,
       previousMonarchUserId: undefined,
       previousGameRoles: [],
-      roomCode: "012345",
+      roomCode: DEFAULT_ROOM_CODE[1],
       selectedRolesPool: [], 
       users: {},
       roleSelection: true,
       allRolesSelected: false,
       selectingRoles: false,
       confirmingTeam: false,
-      withRevealedRoles: true
+      withRevealedRoles: true,
+      inactivityCleanupTimer: undefined
     },
   };  

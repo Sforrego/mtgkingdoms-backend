@@ -8,8 +8,59 @@ import { sanitizeUserData, setInitialPlayerRoles, startRoleSelection, assignPlay
 import { rooms, users, rolesCache, mainRoles } from './state.js';
 import { User, UserData, Role } from './types.js';
 import { emitError, generateRoomCode } from './utils.js';
+import { INACTIVITY_TIMEOUT, CLEANUP_CHECK_INTERVAL, DEFAULT_ROOM_CODE } from './constants.js';
 
-const DEFAULT_ROOM_CODE = ["690420", "012345"];
+
+function updateUserActivity(userId: string): void {
+    if (users[userId]) {
+        users[userId].lastActivityAt = Date.now();
+    }
+}
+
+// Helper function to clean up inactive users from a room
+export function scheduleInactivityCleanup(roomCode: string): void {
+    const room = rooms[roomCode];
+    if (!room) return;
+
+    // Clear any existing timer
+    if (room.inactivityCleanupTimer) {
+        clearTimeout(room.inactivityCleanupTimer);
+    }
+
+    // Only schedule cleanup if no active game, role selection, or team confirmation
+    if (room.hasActiveGame || room.selectingRoles || room.confirmingTeam) {
+        return;
+    }
+
+    // Check every hour for inactive users instead of waiting 3 hours
+    room.inactivityCleanupTimer = setTimeout(() => {
+        const now = Date.now();
+        const usersToRemove: string[] = [];
+
+        for (let userId in room.users) {
+            const user = room.users[userId];
+            // Remove user if inactive for 3 hours
+            if (now - user.lastActivityAt > INACTIVITY_TIMEOUT) {
+                usersToRemove.push(userId);
+            }
+        }
+
+        // Remove inactive users
+        usersToRemove.forEach(userId => {
+            console.log(`[${new Date().toISOString()}] Removing inactive user ${userId} from room ${roomCode}`);
+            delete room.users[userId];
+        });
+
+        // Delete room if empty and not a default room
+        if (Object.keys(room.users).length === 0 && !DEFAULT_ROOM_CODE.includes(roomCode)) {
+            console.log(`[${new Date().toISOString()}] Deleting empty room ${roomCode}`);
+            delete rooms[roomCode];
+        } else if (rooms[roomCode]) {
+            // Reschedule cleanup for next check
+            scheduleInactivityCleanup(roomCode);
+        }
+    }, CLEANUP_CHECK_INTERVAL);
+}
 
 // User Management
 
@@ -35,6 +86,7 @@ function handleLogin(socket: any, userId: string, username: string): void {
         user.socketId = socket.id;
         user.username = username;
         user.isConnected = true;
+        user.lastActivityAt = Date.now(); // Initialize timestamp on reconnect
 
         if (user.roomCode && rooms[user.roomCode]) {
             let roomCode = user.roomCode;
@@ -69,9 +121,12 @@ function handleLogin(socket: any, userId: string, username: string): void {
             hasSelectedRole: false,
             hasReviewedTeam: false,
             potentialRoles: [],
-            isRevealed: false
+            isRevealed: false,
+            lastActivityAt: Date.now()
         };
     }
+
+    updateUserActivity(userId);
 
     socket.emit('loginStatus', eventPayload);
 }
@@ -88,10 +143,12 @@ function handleGuestLogin(socket: Socket, username: string) {
         hasSelectedRole: false,
         hasReviewedTeam: false,
         potentialRoles: [],
-        isRevealed: false
+        isRevealed: false,
+        lastActivityAt: Date.now()
     };
 
     users[userId] = guestUser;
+    updateUserActivity(userId);
 
     socket.emit('loginStatus', {
         userId,
@@ -115,16 +172,11 @@ function handleDisconnect(socket: Socket){
         let room = rooms[roomCode];
         for (let userId in room.users) {
             if (room.users[userId].socketId === socket.id) {
-                if (room.hasActiveGame || room.selectingRoles || room.confirmingTeam){
-                    room.users[userId].isConnected = false;
-                } else {
-                    delete room.users[userId];
-                }
+                room.users[userId].isConnected = false;
+                updateUserActivity(userId);
 
                 socket.to(roomCode).emit('userLeftRoom', { usersInRoom: sanitizeUserData(rooms[roomCode]) });
-                if (Object.keys(room.users).length === 0 && !DEFAULT_ROOM_CODE.includes(roomCode)) {
-                    delete rooms[roomCode];
-                }
+                scheduleInactivityCleanup(roomCode);
 
                 break;
             }
@@ -152,6 +204,7 @@ function handleCreateRoom(socket:Socket, userId: string){
     socket.join(roomCode);
     let user: User = users[userId];
     user.roomCode = roomCode;
+    updateUserActivity(userId);
     rooms[roomCode] = {
         users: {
         [userId]: user
@@ -165,7 +218,10 @@ function handleCreateRoom(socket:Socket, userId: string){
         confirmingTeam: false,
         previousGameRoles: [],
         withRevealedRoles: true,
+        inactivityCleanupTimer: undefined,
     };
+
+    scheduleInactivityCleanup(roomCode);
 
     socket.emit('roomCreated', { roomCode, users: sanitizeUserData(rooms[roomCode]), selectedRoles: rooms[roomCode].selectedRolesPool }); // Send the room code back to the client
     console.log(`[${new Date().toISOString()}] User ${userId} has created the room ${roomCode}`)
@@ -179,7 +235,9 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
             socket.join(roomCode);
             let user: User = users[userId];
             user.roomCode = roomCode;
-            rooms[roomCode].users[userId] = user
+            updateUserActivity(userId);
+            rooms[roomCode].users[userId] = user;
+            scheduleInactivityCleanup(roomCode);
             socket.emit('joinedRoom', { roomCode, users: sanitizeUserData(rooms[roomCode], userId), selectedRoles: rooms[roomCode].selectedRolesPool, 
                 withRevealedRoles: rooms[roomCode].withRevealedRoles }); // Confirm the join event to the joining client
             socket.to(roomCode).emit('userJoinedRoom', { usersInRoom: sanitizeUserData(rooms[roomCode]) }); // Inform all other clients in the room
@@ -193,6 +251,12 @@ function handleJoinRoom(socket:Socket, userId: string, roomCode: string){
 function handleLeaveRoom(socket: Socket, userId: string, roomCode: string){
     console.log(`[${new Date().toISOString()}] ${userId} left room ${roomCode}`);
     if (rooms[roomCode]) {
+        // Clear inactivity timer if this is an active leave (not a disconnect)
+        if (rooms[roomCode].inactivityCleanupTimer) {
+            clearTimeout(rooms[roomCode].inactivityCleanupTimer);
+            rooms[roomCode].inactivityCleanupTimer = undefined;
+        }
+        
         rooms[roomCode].users[userId].roomCode = undefined;
         delete rooms[roomCode].users[userId];
         if (Object.keys(rooms[roomCode].users).length === 0 && !DEFAULT_ROOM_CODE.includes(roomCode)) {
@@ -210,6 +274,12 @@ function handleLeaveRoom(socket: Socket, userId: string, roomCode: string){
 function handleUpdateRolesPool(io: Server, roles: Role[], roomCode: string){
     if (rooms[roomCode]) {
         rooms[roomCode].selectedRolesPool = roles;
+        // Update activity for all connected users in the room
+        Object.keys(rooms[roomCode].users).forEach(userId => {
+            if (rooms[roomCode].users[userId].isConnected) {
+                updateUserActivity(userId);
+            }
+        });
         io.to(roomCode).emit('rolesPoolUpdated', { roles });
     }
 }
@@ -217,6 +287,12 @@ function handleUpdateRolesPool(io: Server, roles: Role[], roomCode: string){
 function handleToggleRevealedRoles(io: Server, roomCode: string, withRevealedRoles: boolean){
     if (rooms[roomCode]) {
         rooms[roomCode].withRevealedRoles = withRevealedRoles;
+        // Update activity for all connected users in the room
+        Object.keys(rooms[roomCode].users).forEach(userId => {
+            if (rooms[roomCode].users[userId].isConnected) {
+                updateUserActivity(userId);
+            }
+        });
         io.to(roomCode).emit("updateRevealedRolesSetting", { withRevealedRoles });
     }
 }
@@ -229,6 +305,10 @@ function handleStartGame(io: Server, socket: Socket, roomCode: string){
             console.log(`[${new Date().toISOString()}] Room ${roomCode} is starting a game.`);
             const room = rooms[roomCode];
             room.hasActiveGame = true;
+            
+            // Update activity for all users in the room
+            Object.keys(room.users).forEach(userId => updateUserActivity(userId));
+            
             assignPlayerRolesOptions(room);
             if (!room.roleSelection){
                 preConfirmationActions(room);
@@ -248,6 +328,7 @@ function handleStartGame(io: Server, socket: Socket, roomCode: string){
 function handleRoleSelected(io: Server, userId: string, roomCode: string, selectedRole: Role) {
     const room = rooms[roomCode];
     const user = room.users[userId];
+    updateUserActivity(userId);
     if(selectedRole === null){
         io.to(user.socketId).emit('error', 'Error when selecting character, no character provided.');
     } else if(user && user.potentialRoles && user.potentialRoles.some(role => role.name === selectedRole.name)) {
@@ -273,6 +354,7 @@ function handleRoleSelected(io: Server, userId: string, roomCode: string, select
 
 function handleRevealRole(io: Server, userId:string, roomCode: string){
     let revealedUser = rooms[roomCode].users[userId]
+    updateUserActivity(userId);
     revealedUser.isRevealed = true;
     if (revealedUser.role && revealedUser.role.name == "Archenemy"){
         let archenemyRevealed = rolesCache.find(r=>r.name == "Archenemy Revealed");
@@ -294,6 +376,10 @@ async function handleEndGame(io: Server, socket: Socket, roomCode: string, winne
         if(rooms[roomCode] && rooms[roomCode].hasActiveGame) {
             console.log(`[${new Date().toISOString()}] Room ${roomCode} has ended a game.`);
             const room = rooms[roomCode];
+            
+            // Update activity for all users in the room
+            Object.keys(room.users).forEach(userId => updateUserActivity(userId));
+            
             if (winnersIds.length > 0){
                 const gameId = v4();
                 createGameEntity(gameId, room, tableClients);
@@ -305,6 +391,9 @@ async function handleEndGame(io: Server, socket: Socket, roomCode: string, winne
             }
 
             resetRoomInfo(io, room);
+            
+            // Schedule inactivity cleanup now that game has ended
+            scheduleInactivityCleanup(roomCode);
         } else {
             socket.emit('error', 'No active game to end.'); 
         }
@@ -318,6 +407,7 @@ async function handleEndGame(io: Server, socket: Socket, roomCode: string, winne
 function handleConceal(io: Server, userId: string, roomCode: string){
     let room = rooms[roomCode];
     let user = rooms[roomCode].users[userId];
+    updateUserActivity(userId);
     user.isRevealed = false;
 
     io.to(roomCode).emit('gameUpdated', { usersInRoom: sanitizeUserData(room) });

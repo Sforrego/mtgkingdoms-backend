@@ -172,9 +172,8 @@ function resetRoomInfo(io: Server, room: Room) {
     user.potentialRoles = [];
     user.hasSelectedRole = false;
     user.hasReviewedTeam = false;
-    if(!user.isConnected){
-      delete room.users[userId];
-    }
+    // Don't remove disconnected users - let them reconnect during the 3-hour window
+    // They will be automatically removed after 3 hours of inactivity via the cleanup timer
   }
   
   room.gameStartedAt = undefined;

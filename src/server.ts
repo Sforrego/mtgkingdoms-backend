@@ -7,6 +7,8 @@ import { port, tableClients } from './config.js';
 import { gracefulShutdown } from './utils.js';
 import { getAllRoles } from './dbOperations.js';
 import { rolesCache, mainRoles, rooms } from './state.js';
+import { DEFAULT_ROOM_CODE } from './constants.js';
+import { scheduleInactivityCleanup } from './socketEvents.js';
 
 dotenv.config();
 const app = express();
@@ -26,8 +28,11 @@ const io = new Server(server, {
 });
 
 getAllRoles(rolesCache, mainRoles, tableClients.rolesClient);
-rooms["690420"].selectedRolesPool = mainRoles;
-rooms["012345"].selectedRolesPool = mainRoles;
+rooms[DEFAULT_ROOM_CODE[0]].selectedRolesPool = mainRoles;
+rooms[DEFAULT_ROOM_CODE[1]].selectedRolesPool = mainRoles;
+scheduleInactivityCleanup(DEFAULT_ROOM_CODE[0]);
+scheduleInactivityCleanup(DEFAULT_ROOM_CODE[1]);
+
 attachSocketEvents(io);
 
 process.on('SIGTERM', () => {

@@ -23,6 +23,7 @@ interface Room {
   allRolesSelected: boolean;
   confirmingTeam: boolean;
   withRevealedRoles: boolean;
+  inactivityCleanupTimer?: NodeJS.Timeout; // Timer for cleaning up inactive users
 }
 
 interface User {
@@ -38,6 +39,7 @@ interface User {
   hasSelectedRole: boolean;
   hasReviewedTeam: boolean;
   teamIds?: string[];
+  lastActivityAt: number;
 }
 
 interface SanitizedUser extends Omit<User, 'role'> {
